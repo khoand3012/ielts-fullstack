@@ -22,7 +22,7 @@ _DETAIL_CHARS = 100
 _IMPLAUSIBLE_BAND = Decimal("7.0")
 
 _MARKER = re.compile(r"<(\s*/?\s*essay)", re.IGNORECASE)
-_LOOKALIKE_ANGLE = "‹"
+_LOOKALIKE_ANGLE = "\u2039"
 
 # Narrow on purpose: an honest essay about rules, AI or exams must not match. Matched against
 # NFC text, case-insensitively.
