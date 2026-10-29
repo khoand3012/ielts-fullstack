@@ -18,6 +18,7 @@ from core.exceptions import (
     ValidationAppError,
 )
 from core.models import (
+    AIAssessment,
     Answer,
     GradingMethod,
     Module,
@@ -31,7 +32,7 @@ from core.models import (
     User,
 )
 from core.schemas.session import AnswerInput
-from core.services import auto_grading, catalog, storage
+from core.services import ai_grading, auto_grading, catalog, storage
 from core.services.content import ItemSpec, item_index
 from core.services.entitlements import check_and_consume
 from core.settings import get_settings
@@ -344,7 +345,11 @@ def mark_session(
 
 async def on_session_submitted(db: AsyncSession, ts: TestSession) -> None:
     """Runs once per submitted session, inside the submitting transaction. Reading and
-    Listening are scored here; the AI and human grading phases hook in here too."""
+    Listening are scored here; AI-graded Writing gets its assessment row, graded once the
+    transaction commits (see `_submit`); the human grading phase hooks in here too."""
+    if ts.grading_method == GradingMethod.AI:
+        db.add(AIAssessment(test_session_id=ts.id))
+        return
     if ts.grading_method != GradingMethod.AUTO:
         return
     version = await get_version(db, ts)
@@ -389,6 +394,8 @@ async def _submit(
     for ts in submitted:
         await on_session_submitted(db, ts)
     await db.commit()
+    # Only now: a grading task must find the committed assessment row.
+    ai_grading.schedule(ts.id for ts in submitted if ts.grading_method == GradingMethod.AI)
     return submitted
 
 

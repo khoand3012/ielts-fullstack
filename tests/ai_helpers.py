@@ -64,6 +64,8 @@ class FakeOpenRouter:
     def __init__(self, *responses: Response) -> None:
         self.responses: list[Response] = list(responses)
         self.requests: list[dict[str, Any]] = []
+        # answers every request once `responses` runs out, if set
+        self.default: Response | None = None
         # set once the first request arrives
         self.called = asyncio.Event()
 
@@ -71,7 +73,9 @@ class FakeOpenRouter:
         self.requests.append(json.loads(request.content))
         self.called.set()
         while True:
-            response = self.responses.pop(0)
+            response = self.responses.pop(0) if self.responses else self.default
+            if response is None:
+                raise AssertionError("FakeOpenRouter has no response left")
             if isinstance(response, asyncio.Event):
                 await response.wait()
                 continue

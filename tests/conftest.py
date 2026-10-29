@@ -130,3 +130,17 @@ async def ai_runner(
         yield runner, fake
     finally:
         await client.aclose()
+
+
+@pytest_asyncio.fixture
+async def ai_installed(
+    ai_runner: tuple["GradingRunner", "FakeOpenRouter"],
+) -> AsyncIterator[tuple["GradingRunner", "FakeOpenRouter"]]:
+    """`ai_runner`, installed so that submissions schedule grading as in the app."""
+    from core.services import ai_grading
+
+    ai_grading.install(ai_runner[0])
+    try:
+        yield ai_runner
+    finally:
+        await ai_grading.shutdown()

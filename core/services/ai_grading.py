@@ -8,7 +8,7 @@ run leaves the row `processing` for the next startup to pick up.
 
 import asyncio
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -364,3 +364,84 @@ async def grade_session(runner: GradingRunner, session_id: uuid.UUID) -> Assessm
         else:
             log.info("ai_grading_ready", session_id=str(session_id), band=str(bands.overall))
         return status
+
+
+# Scheduling (spec §7.1, §7.2). In-process tasks die with the process; the startup resume
+# re-runs whatever is still `processing`. Assumes a single app machine.
+_runner: GradingRunner | None = None
+# One task per session in flight; also the strong reference that keeps each task alive.
+_tasks: dict[uuid.UUID, "asyncio.Task[None]"] = {}
+
+
+def install(runner: GradingRunner | None) -> None:
+    """The runner submissions grade with; `None` turns scheduling off."""
+    global _runner
+    _runner = runner
+
+
+def installed() -> GradingRunner | None:
+    return _runner
+
+
+async def _run(runner: GradingRunner, session_id: uuid.UUID) -> None:
+    try:
+        await grade_session(runner, session_id)
+    except Exception:
+        # The row stays `processing`; the next startup tries again.
+        log.exception("ai_grading_crashed", session_id=str(session_id))
+
+
+def _schedule(runner: GradingRunner, session_ids: Iterable[uuid.UUID]) -> None:
+    for session_id in session_ids:
+        if session_id in _tasks:
+            continue
+        task = asyncio.create_task(_run(runner, session_id))
+        _tasks[session_id] = task
+
+        def forget(done: "asyncio.Task[None]", session_id: uuid.UUID = session_id) -> None:
+            if _tasks.get(session_id) is done:
+                del _tasks[session_id]
+
+        task.add_done_callback(forget)
+
+
+def schedule(session_ids: Iterable[uuid.UUID]) -> None:
+    """Grade these sessions in the background, once each; a no-op with no runner installed.
+    Call only after the transaction that created their rows has committed."""
+    if _runner is not None:
+        _schedule(_runner, session_ids)
+
+
+async def drain() -> None:
+    """Wait for every grading task in flight, including any they schedule."""
+    while _tasks:
+        await asyncio.gather(*_tasks.values(), return_exceptions=True)
+
+
+async def shutdown() -> None:
+    """Cancel the grading in flight (the rows stay `processing`) and stop scheduling."""
+    tasks = list(_tasks.values())
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    install(None)
+
+
+async def resume_processing(runner: GradingRunner) -> int:
+    """Schedule every `processing` assessment, e.g. after a restart killed its task. Never
+    touches `ready`, `held` or `failed` rows, and never raises."""
+    try:
+        async with runner.factory() as db:
+            ids = list(
+                await db.scalars(
+                    select(AIAssessment.test_session_id)
+                    .where(AIAssessment.status == AssessmentStatus.PROCESSING)
+                    .order_by(AIAssessment.created_at)
+                )
+            )
+    except Exception:
+        log.exception("ai_resume_failed")
+        return 0
+    _schedule(runner, ids)
+    log.info("ai_resume_scheduled", count=len(ids))
+    return len(ids)
