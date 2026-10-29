@@ -20,7 +20,19 @@ class Settings(BaseSettings):
     signed_url_ttl_seconds: int = 14_400
 
     openrouter_api_key: str
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
     ai_model: str = "deepseek/deepseek-v4.1-flash-1017"
+    # AI Writing grading runs in-process (one app process). Off in tests: they install a runner.
+    ai_grading_enabled: bool = True
+    ai_max_attempts: int = 3
+    # Attempt n waits ai_backoff_seconds * 4 ** (n - 1) before the next: 2 s, then 8 s.
+    ai_backoff_seconds: float = 2
+    ai_request_timeout_seconds: float = 120
+    ai_max_concurrency: int = 4
+    ai_max_output_tokens: int = 4000
+    ai_temperature: float = 0
+    # On startup, re-run grading jobs a restart interrupted (`processing` rows only).
+    ai_resume_on_startup: bool = True
 
     free_writing_daily: int = 3
     free_speaking_daily: int = 3

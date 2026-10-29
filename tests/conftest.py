@@ -32,6 +32,8 @@ os.environ.setdefault("OPENROUTER_API_KEY", "x")
 # The app's auto-submit loop would use core.db's placeholder engine; tests drive it directly.
 os.environ.setdefault("AUTO_SUBMIT_ENABLED", "false")
 os.environ.setdefault("STARTUP_SCORING_ENABLED", "false")
+os.environ.setdefault("AI_GRADING_ENABLED", "false")
+os.environ.setdefault("AI_RESUME_ON_STARTUP", "false")
 
 
 @pytest.fixture(scope="session")
