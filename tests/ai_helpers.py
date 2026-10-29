@@ -1,8 +1,11 @@
 """Builders for model outputs and OpenRouter responses used by the AI grading tests."""
 
+import asyncio
 import json
 from collections.abc import Collection
 from typing import Any
+
+import httpx
 
 from core.ai.output import TASK_CRITERIA
 
@@ -46,3 +49,37 @@ def completion(content: dict[str, Any] | str, finish_reason: str = "stop") -> di
         ],
         "usage": {"prompt_tokens": 1000, "completion_tokens": 500},
     }
+
+
+Response = dict[str, Any] | httpx.Response | Exception | asyncio.Event
+
+
+class FakeOpenRouter:
+    """OpenRouter stand-in: answers each request with the next of `responses`.
+
+    A dict is a 200 JSON body, an httpx.Response is returned as is, an Exception is raised,
+    and an asyncio.Event makes the call wait on it before the next response is used.
+    """
+
+    def __init__(self, *responses: Response) -> None:
+        self.responses: list[Response] = list(responses)
+        self.requests: list[dict[str, Any]] = []
+        # set once the first request arrives
+        self.called = asyncio.Event()
+
+    async def _handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(json.loads(request.content))
+        self.called.set()
+        while True:
+            response = self.responses.pop(0)
+            if isinstance(response, asyncio.Event):
+                await response.wait()
+                continue
+            if isinstance(response, Exception):
+                raise response
+            if isinstance(response, httpx.Response):
+                return response
+            return httpx.Response(200, json=response)
+
+    def transport(self) -> httpx.MockTransport:
+        return httpx.MockTransport(self._handle)
