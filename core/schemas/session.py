@@ -60,6 +60,8 @@ class SessionRead(BaseModel):
     module: Module | None
     # Reading/Listening, once scored; a partial practice attempt has a mark but no band
     raw_score: int | None
+    # Reading/Listening once scored, Writing once AI-graded; null for a practice attempt
+    # with a blank task
     band: Band | None
     server_time: datetime
 
@@ -138,3 +140,5 @@ class SessionResult(BaseModel):
     band: Band | None
     answered: int | None
     questions: list[ResultQuestion] | None
+    # AI-graded Writing, once graded; null otherwise
+    writing: WritingResult | None = None

@@ -108,8 +108,10 @@ no worker:
 1. User submits a Writing test (Speaking is graded by teachers — see
    `2026-10-24-human-grading-design.md`).
 2. API checks entitlements (§6), inserts an `AIAssessment` row with status
-   `processing`, schedules the grading coroutine as a background task (FastAPI
-   `BackgroundTasks`), and returns immediately.
+   `processing` in the submitting transaction and, once that commits, schedules
+   the grading coroutine as an in-process `asyncio` task
+   (`core/services/ai_grading.schedule`; not FastAPI `BackgroundTasks`, so a
+   deadline auto-submit outside any request is graded too), and returns immediately.
 3. The background task runs `core/services/grading`: the AI model (via OpenRouter) evaluates the
    text → write scores + raw response to the row; flip status to `ready`.
 4. Frontend **polls** until the student-facing status is `graded`; shows bands +
@@ -136,7 +138,7 @@ API; long model calls hold a coroutine (cheap — they're I/O-bound).
 
 **When to add a worker:** if grading load starts slowing HTTP responses, or we
 need more than one API machine. Then: add a queue (ARQ on Redis
-is the default choice), move the call site from `BackgroundTasks` to `enqueue`,
+is the default choice), move the call site from `ai_grading.schedule` to `enqueue`,
 and run the same `core/services/grading` function from the worker. Because the
 logic already lives in `core/`, that is a small change.
 
@@ -188,8 +190,10 @@ is always unlimited.
    `plans/2026-10-26-auto-grading.md`. *(done)*
 5. **AI pipeline (Writing only)** — `core/ai` OpenRouter client, `AIAssessment`,
    in-process background grading task (§5), mandatory prompt caching, retries,
-   hand-off to teachers on final failure, startup resume of stuck rows, polling
-   result delivery.
+   startup resume of stuck rows, polling result delivery; the hand-off to teachers
+   on final failure moves to phase 8. Spec
+   `specs/2026-10-27-ai-writing-grading-design.md`, plan
+   `plans/2026-10-29-ai-writing-grading.md`. *(done)*
 6. **Media** — R2 pre-signed PUT URLs for student recordings; **R2 bucket CORS**
    for browser uploads; turns Speaking sessions on.
 7. **AI test import (Epic B)** — admins upload PDF/Word (+ 4 Listening audio

@@ -11,7 +11,7 @@ The frontend lives at `../ielts-frontend` (Next.js). This folder exposes a REST 
 - **ORM**: SQLAlchemy 2.0 (async) with Alembic migrations
 - **Validation**: Pydantic v2 schemas
 - **Database**: PostgreSQL 15+ (also the record of AI grading job state — no Redis/queue in v1)
-- **Background jobs**: in-process `asyncio` tasks inside the API (FastAPI `BackgroundTasks`) for AI assessment
+- **Background jobs**: in-process `asyncio` tasks inside the API for AI assessment, scheduled once the submit transaction commits (not FastAPI `BackgroundTasks`, so auto-submitted exams are graded too)
 - **Object storage**: Cloudflare R2 (S3-compatible) via `aioboto3` (audio uploads, test assets) — only the endpoint/credentials differ from S3; code is identical
 - **AI grading**: OpenRouter (OpenAI-compatible chat completions API) via `httpx.AsyncClient` — default model `deepseek/deepseek-v4.1-flash-1017`, overridable with `AI_MODEL`
 - **Auth**: JWT (access + refresh) via `python-jose`; passwords with `argon2-cffi`
@@ -25,7 +25,7 @@ The frontend lives at `../ielts-frontend` (Next.js). This folder exposes a REST 
 
 Reading/Listening auto-grading is synchronous: a session is scored inside the transaction that submits it (`on_session_submitted`). If marking throws, the session is still submitted unscored; on startup the app scores every unscored auto session in the background (`run_startup_scoring`, `STARTUP_SCORING_ENABLED`), so the deploy that fixes a scoring bug also fills in its scores.
 
-AI grading (model evaluation via OpenRouter) runs as an in-process background task started after the request returns. The `AIAssessment` row in Postgres *is* the job record (internal status `processing → ready | failed`), so no Redis or queue is needed. Speaking is graded by teachers (see Roles & human grading).
+AI grading (model evaluation via OpenRouter) runs as an in-process `asyncio` task that `core/services/ai_grading.schedule` starts once the submitting transaction commits, whichever way the session was submitted (student, deadline on read, the auto-submit loop). The `AIAssessment` row in Postgres *is* the job record (internal status `processing → ready | held | failed`), so no Redis or queue is needed. Full design: `docs/superpowers/specs/2026-10-27-ai-writing-grading-design.md`. Speaking is graded by teachers (see Roles & human grading).
 
 > **Deferred until scaling is needed:** a separate worker process + job queue (e.g. ARQ on Redis). The grading code lives in `core/services/` precisely so it can later be called from a worker instead of a background task without rewriting it.
 
@@ -54,7 +54,7 @@ ielts-backend/
 │   ├── exceptions.py     # AppError hierarchy → HTTP mapping
 │   ├── logging.py        # structlog + request-id middleware
 │   ├── cli.py            # admin CLI (set-role)
-│   └── ai/               # OpenRouter client, prompts, rubrics (planned)
+│   └── ai/               # OpenRouter client, prompts, rubrics, injection checks
 ├── alembic/              # migrations
 ├── tests/
 └── pyproject.toml
@@ -69,7 +69,7 @@ ielts-backend/
 - **Question** — typed (multiple_choice, fill_blank, matching, short_answer, essay_task1, essay_task2, speaking_part1/2/3)
 - **TestSession** — a user's attempt at one test version; `mode` (`practice` = no time limit | `exam` = server deadline + 30 s grace), `started_at`, `deadline`, `submitted_at`, status, and `grading_method` (`auto` | `ai` | `human`, fixed at submission). Answers autosave; expired exam sessions are auto-submitted (on the next read/save, and by an in-process loop every minute)
 - **Answer** — user's response to a question; for auto-graded types, scored synchronously (marking rules in `core/services/auto_grading.py`; Reading versions carry a `module`, `academic | general_training`, that picks the band table in `core/services/bands.py`; result at `GET /sessions/{id}/result`); AI-graded Writing points to an `AIAssessment` row; human-graded sessions have a `HumanGrade`
-- **AIAssessment** — Writing only. Band scores per criterion + overall + feedback text; populated asynchronously by an in-process background task. The frontend **polls** the result endpoint, where students only ever see `being_graded → graded` (no SSE/WebSocket in v1)
+- **AIAssessment** — Writing only (Academic; General Training later). Band scores per criterion + overall + feedback text; populated asynchronously by an in-process background task; `processing → ready | held | failed` (`held` = suspected manipulation, waiting for an admin). The frontend **polls** the result endpoint, where students only ever see `being_graded → graded` (no SSE/WebSocket in v1)
 - **HumanGrade** — one per human-graded session (all Speaking; Writing on request or after AI failure); `awaiting_grader → claimed → graded`; `origin` ∈ `speaking | student_request | ai_fallback`
 - **Entitlement** — per-user, per-skill daily counter for Writing and Speaking tests (see Freemium)
 
@@ -80,7 +80,7 @@ Full design: `docs/superpowers/specs/2026-10-24-human-grading-design.md`.
 - **Roles** — `student` takes tests and sees own results; `teacher` grades from the queue; `admin` does everything a teacher can, sees all results, manages users and claims, and sees the grading overview
 - **Speaking** is always graded by a teacher. **Writing** is graded by AI unless the student sets `request_manual_grading` at submission — then it goes to the teacher queue instead
 - **One shared queue** (oldest first) with an atomic claim so no two teachers grade the same test; drafts are private until the grade is submitted; admins can release or reassign stuck claims
-- **AI failure** — a Writing test whose AI grading fails all 3 attempts drops into the teacher queue (`AI_FAILURE_FALLBACK_TO_TEACHER`, default on)
+- **AI failure** — a Writing test whose AI grading fails all 3 attempts drops into the teacher queue (`AI_FAILURE_FALLBACK_TO_TEACHER`, default on) — from phase 8; until then the row stays `failed`, the student keeps seeing "being graded", and `regrade-ai` retries it. Held (flagged) essays join the queue in phase 8 too (origin `ai_flagged`)
 - **Bands** — criteria in half-band steps (0–9); overall uses the British Council rounding rule (nearest half band, .25/.75 round up); Writing weights Task 2 double. All arithmetic lives in `core/services/bands.py`
 
 ## Conventions
@@ -102,9 +102,9 @@ AI grading covers **Writing only** (Speaking is graded by teachers).
 - Prompts and IELTS band rubrics live in `core/ai/prompts/` — version them, do not inline in service code
 - **Prompt caching is mandatory** — the IELTS rubric system prompt is large and reused on every grading call; send it as an identical, unchanging prefix (system message first, student text last) so the provider's automatic prefix caching applies (DeepSeek caches repeated prefixes automatically). If `AI_MODEL` is switched to a provider that needs explicit `cache_control` breakpoints (e.g. Anthropic, Gemini), add them
 - The model is called with **structured outputs** (`response_format` JSON schema, or tool calling) to return JSON: per-criterion band scores + overall + feedback bullets; always validate the JSON with Pydantic, and check a new `AI_MODEL` supports structured outputs on OpenRouter before switching
-- Writing: send full text to the model
+- Writing: send full text to the model, plus the Task 1 chart image (PNG/JPEG/WebP, inline base64) and the staff-only examiner note (`staff_content.examiner_notes`, by task number) when present. Academic only for now
 - Always store the raw model response alongside the parsed result for debugging and re-evaluation
-- Grading runs as an in-process background task: up to 3 attempts with exponential backoff; on final failure the `AIAssessment` row is marked `failed` with the error stored **and** the test is handed to the teacher queue as a `HumanGrade(origin=ai_fallback)` (unless `AI_FAILURE_FALLBACK_TO_TEACHER` is off)
+- Grading runs as an in-process background task: up to 3 attempts with exponential backoff; on final failure the `AIAssessment` row is marked `failed` with the error stored (phase 8 adds the hand-off to the teacher queue as a `HumanGrade(origin=ai_fallback)`, unless `AI_FAILURE_FALLBACK_TO_TEACHER` is off). A grade that raises any manipulation signal ends `held` (never retried) until an admin releases it with `held-ai release`. Only `ready` writes `test_sessions.band`
 - In-process tasks die with the process — on startup, re-run any `AIAssessment` rows stuck in `processing` (never `failed` ones) so a deploy/restart never strands a grading job. This assumes a single machine — revisit (lease/stale threshold or a real worker) before running more than one
 
 ## Security notes
@@ -112,6 +112,7 @@ AI grading covers **Writing only** (Speaking is graded by teachers).
 - Audio uploads use **pre-signed R2 PUT URLs** — backend never proxies upload bytes (R2 bucket CORS required for browser uploads)
 - Session timers are **server-enforced** — `started_at` checked on submission, not client-supplied
 - JWTs short-lived (15 min access, 30 day refresh); refresh tokens rotate on use
+- **Prompt injection** — essays are data, never instructions: invisible characters and fake `<essay` markers are neutralised, each essay sits between random-id markers, the system prompt says so, the output is a strict schema of plain text with quotes checked against the essay, and pattern/hidden-text/marker/model/implausible-band signals hold the grade for human review (`core/ai/injection.py`). Logs never contain essay text
 - **Roles** are checked from the `users` row on every request (never a JWT claim), so a role change applies on the next request. Sign-up always creates a `student`; only admins change roles; the first admin is created with `python -m core.cli set-role <email> admin`
 
 ## Freemium / entitlements
@@ -134,6 +135,8 @@ The product is freemium. Limits apply **only to Writing and Speaking**; Reading/
 - `uv run python -m core.cli set-role <email> <role>` — set a user's role (bootstrap the first admin)
 - `uv run python -m core.cli load-test <file.json> [--publish]` — load a test file (e.g. `seed/tests/practice-01-reading.json`) as a draft, optionally publish it
 - `uv run python -m core.cli regrade-auto [--all]` — score Reading/Listening sessions that have no score (the startup sweep does this on every deploy); `--all` re-scores every session after a marking-rule or band-table change
+- `uv run python -m core.cli regrade-ai` — retry AI grading of every `failed` Writing session (never touches `ready` or `held`)
+- `uv run python -m core.cli held-ai list|show <id>|release <id> --by <admin-email>` — review essays held for suspected manipulation; `release` publishes the AI grade
 - `uv run pytest` — run tests (Docker must be running)
 - `uv run ruff check . && uv run ruff format --check . && uv run mypy .` — lint + format + type check
 

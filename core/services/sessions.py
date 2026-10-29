@@ -20,6 +20,7 @@ from core.exceptions import (
 from core.models import (
     AIAssessment,
     Answer,
+    AssessmentStatus,
     GradingMethod,
     Module,
     SessionMode,
@@ -31,7 +32,7 @@ from core.models import (
     TestVersion,
     User,
 )
-from core.schemas.session import AnswerInput
+from core.schemas.session import AnswerInput, WritingResult
 from core.services import ai_grading, auto_grading, catalog, storage
 from core.services.content import ItemSpec, item_index
 from core.services.entitlements import check_and_consume
@@ -124,22 +125,24 @@ def time_spent_seconds(ts: TestSession) -> int:
 
 async def get_result(
     db: AsyncSession, user: User, session_id: uuid.UUID, now: datetime | None = None
-) -> tuple[TestSession, auto_grading.Score | None]:
+) -> tuple[TestSession, auto_grading.Score | None, WritingResult | None]:
     """The caller's submitted session, with its per-question marks when it has been scored
-    (None if not scored, or if recomputing them fails). The stored score is the total; the
-    marks are recomputed with the current rules."""
+    (None if not scored, or if recomputing them fails), or its AI feedback once that is
+    `ready`. The stored score is the total; the marks are recomputed with the current rules."""
     ts = await get_session(db, user, session_id, now)
     if ts.status == SessionStatus.IN_PROGRESS:
         raise ConflictError("session is not submitted yet")
+    if ts.grading_method == GradingMethod.AI:
+        return ts, None, await _writing_result(db, ts)
     if ts.grading_method != GradingMethod.AUTO or ts.raw_score is None:
-        return ts, None
+        return ts, None, None
     version, answers = await get_version(db, ts), await get_answers(db, ts)
     try:
         score = mark_session(ts, version, answers)
     except Exception:
         # The stored score is still valid; show it without the per-question marks.
         log.exception("auto_grading_failed", session_id=str(ts.id))
-        return ts, None
+        return ts, None, None
     if score.raw_score != ts.raw_score:
         # The rules changed since this session was scored: `regrade-auto --all` is due.
         log.warning(
@@ -148,7 +151,19 @@ async def get_result(
             stored=ts.raw_score,
             recomputed=score.raw_score,
         )
-    return ts, score
+    return ts, score, None
+
+
+async def _writing_result(db: AsyncSession, ts: TestSession) -> WritingResult | None:
+    """The AI feedback, only once `ready`: held, failed and processing all look the same to
+    the student."""
+    stored = await db.scalar(
+        select(AIAssessment.result).where(
+            AIAssessment.test_session_id == ts.id,
+            AIAssessment.status == AssessmentStatus.READY,
+        )
+    )
+    return WritingResult.model_validate(stored) if stored is not None else None
 
 
 async def list_sessions(
