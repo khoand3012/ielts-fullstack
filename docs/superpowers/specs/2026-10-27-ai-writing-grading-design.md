@@ -1,7 +1,7 @@
 # AI grading (Writing, Academic) — Design
 
 **Date:** 2026-10-27
-**Status:** Draft, awaiting product-owner approval (open questions answered: feedback level, chart image + examiner note, English feedback, Academic only, lower band when unsure, failure stays "being graded", blank practice tasks, suspected
+**Status:** Approved 2026-10-29 (open questions answered by the product owner: feedback level, chart image + examiner note, English feedback, Academic only, lower band when unsure, failure stays "being graded", blank practice tasks, suspected
 manipulation held for human review).
 **Roadmap:** phase 5 of `specs/2026-06-23-backend-foundation-design.md` §7.
 **Builds on:** the async grading model (foundation spec §5), the human-grading spec
