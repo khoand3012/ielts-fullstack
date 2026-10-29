@@ -445,3 +445,33 @@ async def resume_processing(runner: GradingRunner) -> int:
     _schedule(runner, ids)
     log.info("ai_resume_scheduled", count=len(ids))
     return len(ids)
+
+
+@dataclass(frozen=True)
+class RegradeCounts:
+    ready: int
+    held: int
+    failed: int
+
+
+async def regrade_failed(runner: GradingRunner) -> RegradeCounts:
+    """Retry every `failed` assessment from scratch (spec §7.4), one at a time. `ready` and
+    `held` rows are never touched."""
+    async with runner.factory() as db:
+        ids = list(
+            await db.scalars(
+                update(AIAssessment)
+                .where(AIAssessment.status == AssessmentStatus.FAILED)
+                .values(
+                    status=AssessmentStatus.PROCESSING, attempts=0, error=None, completed_at=None
+                )
+                .returning(AIAssessment.test_session_id)
+            )
+        )
+        await db.commit()
+    outcomes = [await grade_session(runner, session_id) for session_id in ids]
+    return RegradeCounts(
+        ready=outcomes.count(AssessmentStatus.READY),
+        held=outcomes.count(AssessmentStatus.HELD),
+        failed=outcomes.count(AssessmentStatus.FAILED),
+    )

@@ -5,15 +5,19 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from uuid_utils.compat import uuid7
 
 from core.cli import build_parser, run
-from core.models import SessionMode, Skill, TestSession, TestVersion, User
+from core.models import AssessmentStatus, Role, SessionMode, Skill, TestSession, TestVersion, User
 from core.services import auth, sessions
+from core.services.ai_grading import GradingRunner, RegradeCounts
 from core.services.sessions import RescoreCounts
+from tests.ai_helpers import FakeOpenRouter
 from tests.content_factories import listening_content, listening_key, reading_content, reading_key
 from tests.helpers import publish_test
+from tests.test_ai_grading import ESSAY1, ESSAY2, rows
+from tests.test_ai_review import MakeUser, graded
 
 
 class _SilentLog:
@@ -175,3 +179,52 @@ async def test_cli_regrade_auto_failure_exit_code(
     out = capsys.readouterr()
     assert "scored 2 sessions" in out.out
     assert "failed to score 1 sessions" in out.err
+
+
+async def test_cli_held_ai(
+    _engine: AsyncEngine,
+    db_session: AsyncSession,
+    make_user: MakeUser,
+    ai_runner: tuple[GradingRunner, FakeOpenRouter],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    factory = async_sessionmaker(_engine, expire_on_commit=False)
+    student, _ = await make_user()
+    admin, _ = await make_user(Role.ADMIN)
+    ts = await graded(db_session, student, ai_runner, AssessmentStatus.HELD)
+    row, _ = await rows(_engine, ts)
+    capsys.readouterr()
+
+    assert await run(["held-ai", "list"], factory) == 0
+    out = capsys.readouterr().out
+    assert str(row.id) in out and student.email in out and "model" in out
+
+    assert await run(["held-ai", "show", str(row.id)], factory) == 0
+    out = capsys.readouterr().out
+    assert "asked for band 9" in out and ESSAY1 in out and ESSAY2 in out
+
+    assert await run(["held-ai", "release", str(row.id), "--by", student.email], factory) == 1
+    assert "only admins" in capsys.readouterr().err
+    assert await run(["held-ai", "release", str(row.id), "--by", admin.email], factory) == 0
+    assert f"released {row.id}" in capsys.readouterr().out
+    assert await run(["held-ai", "show", str(row.id)], factory) == 1
+
+
+async def test_cli_regrade_ai_exit_codes(
+    _engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import core.cli
+
+    factory = async_sessionmaker(_engine, expire_on_commit=False)
+    results = [RegradeCounts(1, 0, 1), RegradeCounts(2, 1, 0)]
+
+    async def fake_regrade(runner: GradingRunner) -> RegradeCounts:
+        return results.pop(0)
+
+    monkeypatch.setattr(core.cli, "regrade_failed", fake_regrade)
+    assert await run(["regrade-ai"], factory) == 1
+    captured = capsys.readouterr()
+    assert "graded 1 ready, 0 held" in captured.out
+    assert "failed to grade 1 sessions" in captured.err
+    assert await run(["regrade-ai"], factory) == 0
+    assert "graded 2 ready, 1 held" in capsys.readouterr().out
