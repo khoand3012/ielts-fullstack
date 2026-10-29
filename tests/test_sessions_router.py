@@ -80,7 +80,7 @@ async def test_assets_are_signed_urls(
 ) -> None:
     _, tok = await make_user()
     writing = await start(app_client, db_session, tok, Skill.WRITING)
-    assert writing["content"]["tasks"][0]["image"] == "https://signed/tests/f/task1.svg"
+    assert writing["content"]["tasks"][0]["image"] == "https://signed/tests/f/task1.png"
     listening = await start(app_client, db_session, tok, Skill.LISTENING)
     assert listening["content"]["parts"][3]["audio"] == "https://signed/tests/f/part4.mp3"
 

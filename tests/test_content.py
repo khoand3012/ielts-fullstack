@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from core.models.enums import Skill
-from core.schemas.content import AnswerKey
+from core.schemas.content import AnswerKey, Problem, StaffContent
 from core.services.content import asset_keys, item_index, parse_content, validate_version
 from tests.content_factories import (
     listening_content,
@@ -148,7 +148,7 @@ def test_asset_keys_lists_audio_and_images() -> None:
     lc = parse_content(Skill.LISTENING, listening_content())
     assert asset_keys(Skill.LISTENING, lc) == [f"tests/f/part{n}.mp3" for n in range(1, 5)]
     wc = parse_content(Skill.WRITING, writing_content())
-    assert asset_keys(Skill.WRITING, wc) == ["tests/f/task1.svg"]
+    assert asset_keys(Skill.WRITING, wc) == ["tests/f/task1.png"]
     sc = parse_content(Skill.SPEAKING, speaking_content())
     assert asset_keys(Skill.SPEAKING, sc) == ["tests/f/q2.mp3"]
 
@@ -164,3 +164,34 @@ def test_multi_number_text_item_is_an_error() -> None:
     assert [(p.code, p.question, p.severity) for p in problems] == [
         ("multi_number_item", 8, "error")
     ]
+
+
+def _writing_problems(content: dict[str, object], staff: dict[str, object]) -> list[Problem]:
+    return validate_version(
+        Skill.WRITING, parse_content(Skill.WRITING, content), {}, StaffContent.model_validate(staff)
+    )
+
+
+def test_writing_svg_image_is_an_error() -> None:
+    c = writing_content()
+    c["tasks"][0]["image"] = "tests/f/task1.svg"
+    problems = [p for p in _writing_problems(c, {}) if p.code == "unsupported_image"]
+    assert [(p.code, p.section) for p in problems] == [("unsupported_image", 1)]
+    for ext in (".PNG", ".jpg", ".jpeg", ".webp"):
+        c["tasks"][0]["image"] = f"tests/f/task1{ext}"
+        assert _writing_problems(c, {}) == []
+
+
+def test_examiner_notes_rules() -> None:
+    wrong_task = _writing_problems(writing_content(), {"examiner_notes": {3: "x"}})
+    assert [(p.code, p.section) for p in wrong_task] == [("unknown_examiner_note", 3)]
+    on_listening = validate_version(
+        Skill.LISTENING,
+        parse_content(Skill.LISTENING, listening_content()),
+        listening_key(),
+        StaffContent.model_validate({"examiner_notes": {1: "x"}}),
+    )
+    assert [p.code for p in on_listening] == ["examiner_note_not_writing"]
+    assert _writing_problems(writing_content(), {"examiner_notes": {1: "x", 2: "y"}}) == []
+    with pytest.raises(ValidationError):
+        StaffContent.model_validate({"examiner_notes": {1: ""}})
