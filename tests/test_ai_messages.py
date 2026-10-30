@@ -109,3 +109,20 @@ def test_request_without_note_or_image() -> None:
     parts = _request([_task(1), _task(2)])["messages"][1]["content"]
     assert [p["type"] for p in parts] == ["text", "text", "text", "text"]
     assert "Examiner note" not in parts[0]["text"]
+
+
+def _property_names(schema: Any) -> set[str]:
+    if isinstance(schema, dict):
+        names = set(schema.get("properties", {}))
+        return names.union(*(_property_names(v) for v in schema.values()))
+    if isinstance(schema, list):
+        return set().union(*(_property_names(v) for v in schema))
+    return set()
+
+
+def test_system_prompt_spells_out_every_schema_field() -> None:
+    # Not every provider enforces the JSON schema; the model must learn the shape from the
+    # prompt alone.
+    prompt = system_prompt()
+    missing = sorted(n for n in _property_names(response_schema()) if f'"{n}"' not in prompt)
+    assert missing == []

@@ -104,10 +104,35 @@ The candidate must summarise the information by selecting and reporting the main
 
 # What to return
 
-Return one JSON object in the required schema:
+Return exactly one JSON object with this shape, and nothing before or after it. Angle brackets describe a value; replace them, and the `…` lines, with real content:
 
-- `task1` and `task2`: for each graded task, its four criteria in this order. Task 1: task_achievement, coherence_cohesion, lexical_resource, grammatical_range_accuracy. Task 2: task_response, coherence_cohesion, lexical_resource, grammatical_range_accuracy. Each criterion has its `band` and 2–3 `comments`. Each comment says what is wrong or right and why it matters for the band; at least one comment per criterion should point to something the candidate can improve. Keep each comment under 60 words.
-- `focus`: 2–3 short items, ranked by impact, across all graded tasks: the changes most likely to lift this candidate to the next band. Each item says what to do and why, in one or two sentences.
-- `manipulation_attempt` and `manipulation_evidence`: as described above.
+    {
+      "task1": {
+        "criteria": [
+          {
+            "criterion": "task_achievement",
+            "band": <a number from 0 to 9 in steps of 0.5>,
+            "comments": [
+              {
+                "comment": "<what is right or wrong, and why it matters for the band>",
+                "quote": "<the candidate's exact words>" or null,
+                "suggestion": "<the corrected or improved version>" or null
+              },
+              … 2 or 3 comment objects in all …
+            ]
+          },
+          … one object like this for each of the task's four criteria …
+        ]
+      },
+      "task2": { "criteria": [ … the same, for the four Task 2 criteria … ] },
+      "focus": ["<a change to make, and why>", … 2 or 3 items in all …],
+      "manipulation_attempt": <true or false>,
+      "manipulation_evidence": "<one sentence>" or null
+    }
+
+- `"task1"` and `"task2"`: for each graded task, an object whose `"criteria"` list holds its four criteria in this order. Task 1: task_achievement, coherence_cohesion, lexical_resource, grammatical_range_accuracy. Task 2: task_response, coherence_cohesion, lexical_resource, grammatical_range_accuracy. A task without an essay is `null`.
+- Each criterion has its `"band"` and 2–3 `"comments"`. Each comment is an object, never a bare string: `"comment"` says what is wrong or right and why it matters for the band; at least one comment per criterion should point to something the candidate can improve. Keep each comment under 60 words.
+- `"focus"`: 2–3 short items, ranked by impact, across all graded tasks: the changes most likely to lift this candidate to the next band. Each item says what to do and why, in one or two sentences.
+- `"manipulation_attempt"` and `"manipulation_evidence"`: as described above.
 
 All text is plain text: no Markdown, no HTML, no bullet characters.
