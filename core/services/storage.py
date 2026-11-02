@@ -26,13 +26,19 @@ _IMAGE_TYPES = {
 }
 
 
+def _server_endpoint() -> str:
+    settings = get_settings()
+    return settings.r2_internal_endpoint_url or settings.r2_endpoint_url
+
+
 @asynccontextmanager
 async def _client() -> AsyncIterator[Any]:
+    """For calls this process makes itself (uploads, reads), not for signing."""
     settings = get_settings()
     session = aioboto3.Session()
     async with session.client(
         "s3",
-        endpoint_url=settings.r2_endpoint_url,
+        endpoint_url=_server_endpoint(),
         aws_access_key_id=settings.r2_access_key_id,
         aws_secret_access_key=settings.r2_secret_access_key,
         region_name="auto",

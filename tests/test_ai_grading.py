@@ -133,6 +133,9 @@ async def test_grade_ready(
     [request] = fake.requests
     assert has_image(request)
     assert any("Examiner note" in t for t in texts(request))
+    settings = get_settings()
+    assert request["max_tokens"] == settings.ai_max_output_tokens
+    assert request["provider"]["ignore"] == settings.ai_provider_ignore
 
 
 async def test_grade_retries_then_ready(

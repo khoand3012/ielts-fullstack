@@ -5,7 +5,7 @@ from core.ai.injection import clean_essay, word_count
 from core.ai.messages import TaskInput, build_request
 from core.ai.output import ModelOutput
 from core.ai.prompts import PROMPT_VERSION, response_schema, system_prompt
-from core.settings import get_settings
+from core.settings import Settings, get_settings
 
 PNG = (b"\x89PNG fake", "image/png")
 
@@ -126,3 +126,20 @@ def test_system_prompt_spells_out_every_schema_field() -> None:
     prompt = system_prompt()
     missing = sorted(n for n in _property_names(response_schema()) if f'"{n}"' not in prompt)
     assert missing == []
+
+
+def test_request_ignores_providers() -> None:
+    tasks = [_task(2)]
+    ignored = build_request(
+        tasks, model="m", max_tokens=1, temperature=0.0, ignore_providers=["venice"]
+    )
+    assert ignored["provider"] == {"require_parameters": True, "ignore": ["venice"]}
+    assert _request(tasks)["provider"] == {"require_parameters": True}
+
+
+def test_settings_defaults_fit_a_reasoning_model() -> None:
+    # Measured 2026-10-30: replies use 1.6-4k tokens, over half of it reasoning; Venice
+    # accepted the JSON schema but didn't enforce it.
+    settings = Settings(_env_file=None)
+    assert settings.ai_max_output_tokens == 12000
+    assert settings.ai_provider_ignore == ["venice"]

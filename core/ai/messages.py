@@ -34,7 +34,12 @@ def _prompt_text(task: TaskInput) -> str:
 
 
 def build_request(
-    tasks: Sequence[TaskInput], *, model: str, max_tokens: int, temperature: float
+    tasks: Sequence[TaskInput],
+    *,
+    model: str,
+    max_tokens: int,
+    temperature: float,
+    ignore_providers: Sequence[str] = (),
 ) -> dict[str, Any]:
     parts: list[dict[str, Any]] = []
     for task in tasks:
@@ -46,6 +51,10 @@ def build_request(
     for task in tasks:
         essay = wrap_essay(task.number, task.essay.text, task.words, new_marker_id())
         parts.append({"type": "text", "text": essay})
+    # Only route to providers that honour every parameter, the JSON schema below included.
+    provider: dict[str, Any] = {"require_parameters": True}
+    if ignore_providers:
+        provider["ignore"] = list(ignore_providers)
     return {
         "model": model,
         "messages": [
@@ -60,8 +69,7 @@ def build_request(
                 "schema": response_schema(),
             },
         },
-        # Only route to providers that honour every parameter, the JSON schema above included.
-        "provider": {"require_parameters": True},
+        "provider": provider,
         "max_tokens": max_tokens,
         "temperature": temperature,
     }

@@ -214,6 +214,7 @@ async def _call(
             model=settings.ai_model,
             max_tokens=settings.ai_max_output_tokens,
             temperature=settings.ai_temperature,
+            ignore_providers=settings.ai_provider_ignore,
         )
         entry: dict[str, Any] = {"attempt": attempt, "at": _now().isoformat()}
         body: Any = None

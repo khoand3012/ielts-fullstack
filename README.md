@@ -117,6 +117,7 @@ After that, admins manage other users' roles through `PATCH /admin/users/{user_i
 | `uv run python -m core.cli regrade-auto [--all]` | Score Reading/Listening sessions with no score; `--all` re-scores every one |
 | `uv run python -m core.cli regrade-ai` | Retry AI grading of every failed Writing session |
 | `uv run python -m core.cli held-ai list\|show <id>\|release <id> --by <admin-email>` | Review Writing grades held for suspected manipulation; `release` publishes the AI grade |
+| `uv run python scripts/ai_check.py seed\|redteam` | Check AI grading against the real model (needs a real `OPENROUTER_API_KEY`): the seed test twice, or the prompt-injection attacks |
 | `uv run alembic revision --autogenerate -m "msg"` | Create a migration |
 | `uv run pytest` | Run tests |
 | `uv run ruff check . && uv run ruff format --check . && uv run mypy .` | Lint, format, type check |
@@ -130,7 +131,8 @@ All settings are read through `core/settings.py` (`pydantic-settings`); nothing 
 |---|---|---|---|
 | `DATABASE_URL` | yes | — | Async Postgres DSN (`postgresql+asyncpg://…`) |
 | `JWT_SECRET` | yes | — | Signing secret for access/refresh tokens |
-| `R2_ENDPOINT_URL` | yes | — | R2/S3 endpoint (MinIO locally) |
+| `R2_ENDPOINT_URL` | yes | — | R2/S3 endpoint (MinIO locally); signed URLs use it, so browsers must reach it |
+| `R2_INTERNAL_ENDPOINT_URL` | no | — | Where the API itself reaches storage, if different (Docker Compose sets `http://minio:9000`) |
 | `R2_ACCESS_KEY_ID` | yes | — | R2 access key |
 | `R2_SECRET_ACCESS_KEY` | yes | — | R2 secret key |
 | `R2_BUCKET` | yes | — | Bucket for audio and test assets |
@@ -143,7 +145,8 @@ All settings are read through `core/settings.py` (`pydantic-settings`); nothing 
 | `AI_BACKOFF_SECONDS` | no | `2` | Wait before retry *n* is this × 4^(n−1) |
 | `AI_REQUEST_TIMEOUT_SECONDS` | no | `120` | Timeout of one model call |
 | `AI_MAX_CONCURRENCY` | no | `4` | Gradings in flight at once |
-| `AI_MAX_OUTPUT_TOKENS` | no | `4000` | Output token cap per call |
+| `AI_MAX_OUTPUT_TOKENS` | no | `12000` | Output token cap per call, reasoning included |
+| `AI_PROVIDER_IGNORE` | no | `["venice"]` | OpenRouter providers never used for grading (JSON list) |
 | `AI_TEMPERATURE` | no | `0` | Sampling temperature |
 | `ACCESS_TOKEN_TTL_SECONDS` | no | `900` | Access token lifetime (15 min) |
 | `REFRESH_TOKEN_TTL_SECONDS` | no | `2592000` | Refresh token lifetime (30 days) |

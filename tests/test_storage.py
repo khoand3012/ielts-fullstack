@@ -69,3 +69,12 @@ async def test_read_object_returns_bytes_and_type(monkeypatch: pytest.MonkeyPatc
     untyped = _FakeS3({"Body": _Body(b"w")})
     monkeypatch.setattr(storage, "_client", _fake_client(untyped))
     assert await storage.read_object("tests/x/chart.webp") == (b"w", "image/webp")
+
+
+async def test_server_calls_use_the_internal_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = get_settings()
+    assert storage._server_endpoint() == settings.r2_endpoint_url
+    monkeypatch.setattr(settings, "r2_internal_endpoint_url", "http://minio:9000")
+    assert storage._server_endpoint() == "http://minio:9000"
+    # Browsers can't reach the internal address: signed URLs keep the public one.
+    assert (await signed_get_url("tests/x/a.png")).startswith(settings.r2_endpoint_url)
