@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Criterion, WritingResult, WritingTask } from "@/lib/api/types";
+import { ContentError, parseContent } from "@/lib/content/schema";
+import { useSessionQuery } from "@/lib/session/queries";
 import { formatBand } from "@/lib/result/format";
 import { type FeedbackComment, placeComments } from "@/lib/result/highlights";
 import { cn } from "@/lib/utils";
@@ -116,7 +118,32 @@ function TaskView({ task }: { task: WritingTask }) {
   );
 }
 
-export function WritingResultView({ writing }: { writing: WritingResult }) {
+/** Task number -> minimum words. Empty while the session is loading, failed, or unparseable. */
+function useMinWords(sessionId: string): Map<number, number> {
+  const { data } = useSessionQuery(sessionId);
+  return useMemo(() => {
+    const mins = new Map<number, number>();
+    if (!data) return mins;
+    try {
+      const parsed = parseContent("writing", data.session.content);
+      if (parsed.skill === "writing") {
+        for (const t of parsed.content.tasks) mins.set(t.number, t.min_words);
+      }
+    } catch (err) {
+      if (!(err instanceof ContentError)) throw err;
+    }
+    return mins;
+  }, [data]);
+}
+
+export function WritingResultView({
+  writing,
+  sessionId,
+}: {
+  writing: WritingResult;
+  sessionId: string;
+}) {
+  const minWords = useMinWords(sessionId);
   // The hero's "Fix these next" shows the first three focus items.
   const moreFocus = writing.focus.slice(3);
   const first = writing.tasks[0];
@@ -130,20 +157,29 @@ export function WritingResultView({ writing }: { writing: WritingResult }) {
           <Tabs defaultValue={String(first.number)}>
             {/* Word count stacks under the band so two tabs fit a 360px screen. */}
             <TabsList className="group-data-horizontal/tabs:h-auto">
-              {writing.tasks.map((t) => (
-                <TabsTrigger
-                  key={t.number}
-                  value={String(t.number)}
-                  className="h-auto flex-col gap-0 px-4 py-1"
-                >
-                  <span>
-                    Task {t.number} · {formatBand(t.band)}
-                  </span>{" "}
-                  <span className="text-xs font-normal tabular-nums">
-                    {t.word_count} {t.word_count === 1 ? "word" : "words"}
-                  </span>
-                </TabsTrigger>
-              ))}
+              {writing.tasks.map((t) => {
+                const min = minWords.get(t.number);
+                const under = min !== undefined && t.word_count > 0 && t.word_count < min;
+                return (
+                  <TabsTrigger
+                    key={t.number}
+                    value={String(t.number)}
+                    className="h-auto flex-col gap-0 px-4 py-1"
+                  >
+                    <span>
+                      Task {t.number} · {formatBand(t.band)}
+                    </span>{" "}
+                    <span className="text-xs font-normal tabular-nums">
+                      {t.word_count} {t.word_count === 1 ? "word" : "words"}
+                    </span>
+                    {under && (
+                      <span className="mt-0.5 rounded-full bg-amber-100 px-2 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                        Under {min} words
+                      </span>
+                    )}
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
             {/* Radix unmounts inactive panels, so switching task resets the filter and selection. */}
             {writing.tasks.map((t) => (

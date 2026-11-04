@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Criterion, SessionResult } from "@/lib/api/types";
 import { POLL_CAP_MS, pollDelay } from "@/lib/result/queries";
 import { makeResult, makeWritingResult } from "@/tests/fixtures/result";
+import { makeWritingSession } from "@/tests/fixtures/session";
 import { server } from "@/tests/msw/server";
 import { renderWithProviders } from "@/tests/render";
 import { resetRouter, router } from "@/tests/router";
@@ -16,9 +17,12 @@ beforeEach(resetRouter);
 afterEach(() => vi.useRealTimers());
 
 const URL = "*/api/backend/sessions/s-1/result";
+const SESSION_URL = "*/api/backend/sessions/s-1";
 const serve = (...results: SessionResult[]) => {
   let n = 0;
   server.use(
+    // Writing results also read the session for task minimums; absent by default.
+    http.get(SESSION_URL, () => HttpResponse.json({ error: { code: "not_found", message: "", extra: {} } }, { status: 404 })),
     http.get(URL, () => HttpResponse.json(results[Math.min(n++, results.length - 1)])),
   );
 };
@@ -206,6 +210,32 @@ test("graded Writing shows the essay with highlights", async () => {
   expect(within(fixNext).getByText("Vary your sentence openings")).toBeInTheDocument();
   // Two focus items: the hero shows both, so the Writing view adds no "More to focus on".
   expect(screen.queryByRole("region", { name: "More to focus on" })).toBeNull();
+});
+
+const withTask1Words = (word_count: number) => {
+  const base = makeWritingResult();
+  return makeWritingResult({
+    writing: {
+      ...base.writing!,
+      tasks: [{ ...base.writing!.tasks[0], word_count }, base.writing!.tasks[1]],
+    },
+  });
+};
+
+test("under-length task shows a warning chip", async () => {
+  serve(withTask1Words(120));
+  server.use(http.get(SESSION_URL, () => HttpResponse.json(makeWritingSession())));
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await screen.findByText("Under 150 words")).toBeInTheDocument();
+  expect(screen.queryByText("Under 250 words")).toBeNull();
+});
+
+test("no chip when session content fails to load", async () => {
+  serve(withTask1Words(120));
+  server.use(http.get(SESSION_URL, () => apiError(500, "internal")));
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await essayTab(/^Task 1 · 6\.0/)).toBeInTheDocument();
+  expect(screen.queryByText(/Under \d+ words/)).toBeNull();
 });
 
 test("tapping a highlight opens the coach panel", async () => {

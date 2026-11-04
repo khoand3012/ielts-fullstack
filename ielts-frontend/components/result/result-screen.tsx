@@ -32,15 +32,17 @@ function fixNextFor(result: SessionResult): string[] {
 }
 
 function Body({
+  sessionId,
   result,
   timedOut,
   onCheckAgain,
 }: {
+  sessionId: string;
   result: SessionResult;
   timedOut: boolean;
   onCheckAgain: () => void;
 }) {
-  if (result.writing) return <WritingResultView writing={result.writing} />;
+  if (result.writing) return <WritingResultView writing={result.writing} sessionId={sessionId} />;
 
   if (result.status === "being_graded") {
     if (timedOut) {
@@ -157,7 +159,7 @@ function ResultContent({ sessionId, query }: { sessionId: string; query: ResultQ
         </div>
       )}
       <ResultHero result={result} fixNext={fixNextFor(result)} />
-      <Body result={result} timedOut={query.timedOut} onCheckAgain={query.checkAgain} />
+      <Body sessionId={sessionId} result={result} timedOut={query.timedOut} onCheckAgain={query.checkAgain} />
       <div className="flex gap-3">
         <Button asChild variant="outline">
           <Link href="/sessions">My sessions</Link>
