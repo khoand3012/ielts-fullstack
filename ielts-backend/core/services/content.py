@@ -290,18 +290,23 @@ def _validate_speaking(content: SpeakingContent) -> list[Problem]:
 
     long_turn = content.part2.number if content.part2 else None
     for part, q in questions:
-        where = {"section": part, "question": q.number}
         if q.number == long_turn and part == 2:
             if _blank(q.text):
                 problems.append(
-                    Problem(code="missing_cue_card", message="part 2 has no cue card", **where)
+                    Problem(
+                        code="missing_cue_card",
+                        message="part 2 has no cue card",
+                        section=part,
+                        question=q.number,
+                    )
                 )
         elif _blank(q.text) and q.audio is None:
             problems.append(
                 Problem(
                     code="speaking_question_empty",
                     message=f"question {q.number} has neither text nor audio",
-                    **where,
+                    section=part,
+                    question=q.number,
                 )
             )
     return problems

@@ -1,12 +1,20 @@
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import CurrentUser, DbSession
-from core.models import GradingMethod, TestSession
+from core.models import (
+    GradingMethod,
+    Module,
+    SessionMode,
+    SessionStatus,
+    Skill,
+    SubmitReason,
+    TestSession,
+)
 from core.schemas.session import (
     AnswersRequest,
     AnswersResponse,
@@ -31,16 +39,16 @@ def _read(ts: TestSession, info: sessions.SessionTest) -> SessionRead:
         test_id=test.id,
         test_version_id=ts.test_version_id,
         title=test.title,
-        skill=ts.skill,
-        mode=ts.mode,
-        status=ts.status,
+        skill=Skill(ts.skill),
+        mode=SessionMode(ts.mode),
+        status=SessionStatus(ts.status),
         started_at=ts.started_at,
         deadline=ts.deadline,
         submitted_at=ts.submitted_at,
-        submit_reason=ts.submit_reason,
+        submit_reason=SubmitReason(ts.submit_reason) if ts.submit_reason else None,
         request_manual_grading=ts.request_manual_grading,
-        grading_method=ts.grading_method,
-        module=info.module,
+        grading_method=GradingMethod(ts.grading_method) if ts.grading_method else None,
+        module=Module(info.module) if info.module else None,
         raw_score=ts.raw_score,
         band=ts.band,
         server_time=datetime.now(UTC),
@@ -119,7 +127,8 @@ def _question(item: auto_grading.MarkedItem) -> ResultQuestion:
     return ResultQuestion(
         number=item.spec.key,
         numbers=list(item.spec.numbers),
-        kind=item.spec.kind,
+        # auto-graded items are never essay or recording
+        kind=cast(Literal["text", "single_choice", "choice"], item.spec.kind),
         answer=item.answer,
         accepted=item.accepted,
         correct_choices=item.correct_choices,
@@ -141,11 +150,11 @@ def _result(
         session_id=ts.id,
         test_id=info.test.id,
         title=info.test.title,
-        skill=ts.skill,
-        module=info.module,
-        mode=ts.mode,
-        submit_reason=ts.submit_reason,
-        grading_method=ts.grading_method,
+        skill=Skill(ts.skill),
+        module=Module(info.module) if info.module else None,
+        mode=SessionMode(ts.mode),
+        submit_reason=SubmitReason(ts.submit_reason) if ts.submit_reason else None,
+        grading_method=GradingMethod(ts.grading_method) if ts.grading_method else None,
         started_at=ts.started_at,
         submitted_at=ts.submitted_at,
         time_spent_seconds=sessions.time_spent_seconds(ts),

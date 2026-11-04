@@ -19,7 +19,7 @@ def _summary(test: Test, module: str | None) -> TestSummary:
         skill=skill,
         title=test.title,
         exam_time_limit_minutes=int(exam_time_limit(skill).total_seconds() // 60),
-        module=module,
+        module=Module(module) if module else None,
     )
 
 

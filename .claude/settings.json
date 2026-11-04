@@ -13,6 +13,7 @@
       "Bash(uv run pytest *)",
       "Bash(uv run ruff *)",
       "Bash(uv run mypy *)",
+      "Bash(uv run pyright *)",
       "Bash(npm test *)",
       "Bash(npm run lint *)",
       "Bash(npx tsc --noEmit *)",

@@ -35,7 +35,7 @@ def _server_endpoint() -> str:
 async def _client() -> AsyncIterator[Any]:
     """For calls this process makes itself (uploads, reads), not for signing."""
     settings = get_settings()
-    session = aioboto3.Session()
+    session: Any = aioboto3.Session()  # untyped library
     async with session.client(
         "s3",
         endpoint_url=_server_endpoint(),

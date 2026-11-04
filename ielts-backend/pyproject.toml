@@ -27,6 +27,7 @@ dev = [
     "pytest-asyncio>=0.25",
     "testcontainers[postgres]>=4.9",
     "asgi-lifespan>=2.1",
+    "pyright>=1.1.414",
 ]
 
 [build-system]
@@ -42,6 +43,12 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+include = ["api", "core", "scripts", "tests"]
+venvPath = "."
+venv = ".venv"
 
 [tool.mypy]
 python_version = "3.11"

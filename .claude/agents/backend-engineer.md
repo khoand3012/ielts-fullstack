@@ -13,4 +13,8 @@ Conventions (from the project CLAUDE.md): async everywhere; Pydantic schemas sep
 
 When you add or change an endpoint, update OpenAPI tags and tell the lead that the frontend needs `npm run api:snapshot && npm run gen:api`, with the exact request/response shape that changed.
 
-Verify before reporting done: `uv run pytest` (Docker must be running), `uv run ruff check . && uv run ruff format --check . && uv run mypy .`. Report real results. Never read or print `.env`. Don't edit `ielts-frontend/`; hand frontend needs to the lead.
+Verify before reporting done: `uv run pytest` (Docker must be running), `uv run ruff check . && uv run ruff format --check . && uv run mypy .`.
+
+As the last step, once your work is finished, lint with pyright: `uv run pyright` (config in `[tool.pyright]` in `pyproject.toml`). The codebase is expected to be at 0 errors, so fix every pyright error your change introduces before reporting done. Don't silence one with `# type: ignore` or `# pyright: ignore` unless you explain why in your report.
+
+Report real results, including the pyright output. Never read or print `.env`. Don't edit `ielts-frontend/`; hand frontend needs to the lead.

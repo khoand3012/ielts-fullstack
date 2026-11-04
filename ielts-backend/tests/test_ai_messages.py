@@ -140,6 +140,7 @@ def test_request_ignores_providers() -> None:
 def test_settings_defaults_fit_a_reasoning_model() -> None:
     # Measured 2026-10-30: replies use 1.6-4k tokens, over half of it reasoning; Venice
     # accepted the JSON schema but didn't enforce it.
-    settings = Settings(_env_file=None)
+    # required fields and `_env_file` are invisible to pyright (pydantic-settings)
+    settings = Settings(_env_file=None)  # pyright: ignore[reportCallIssue]
     assert settings.ai_max_output_tokens == 12000
     assert settings.ai_provider_ignore == ["venice"]

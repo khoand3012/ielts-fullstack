@@ -11,7 +11,7 @@ def test_settings_load_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "sk")
     monkeypatch.setenv("R2_BUCKET", "bucket")
     monkeypatch.setenv("OPENROUTER_API_KEY", "or")
-    s = Settings()
+    s = Settings()  # pyright: ignore[reportCallIssue]  # fields come from the env
     assert s.database_url.endswith("/d")
     assert s.access_token_ttl_seconds == 900
     assert s.free_writing_daily == 3
@@ -22,4 +22,4 @@ def test_settings_load_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_settings_ai_model_overridable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_MODEL", "some/other-model")
-    assert Settings().ai_model == "some/other-model"
+    assert Settings().ai_model == "some/other-model"  # pyright: ignore[reportCallIssue]
