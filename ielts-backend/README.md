@@ -3,7 +3,7 @@
 Python backend for an IELTS practice platform. Serves test content, manages sessions, auto-grades
 Reading/Listening, and orchestrates grading of Writing (AI via OpenRouter) and Speaking.
 
-The frontend lives at `../ielts-frontend` (Next.js) and consumes the REST API exposed here.
+The frontend lives in the sibling folder `../ielts-frontend` (Next.js) of the same monorepo and consumes the REST API exposed here. See the [root README](../README.md) for the full setup.
 
 > **Status:** Implemented: auth (register/login/refresh/logout/me), account roles with admin user
 > management, IELTS band arithmetic, versioned single-skill tests loaded by CLI, test sessions
@@ -242,5 +242,6 @@ Cost-optimized and Cloudflare-centric:
 - **First admin** — register, then run
   `fly ssh console -C "python -m core.cli set-role <email> admin"`
 
-CI (GitHub Actions) runs `uv sync --frozen`, `ruff check`, `ruff format --check`, `mypy`, and
-`pytest` on pushes to `main` and on every pull request.
+CI (GitHub Actions, `.github/workflows/backend.yml` at the monorepo root) runs `uv sync --frozen`,
+`ruff check`, `ruff format --check`, `mypy`, and `pytest` from `ielts-backend/` on pushes to `main`
+and on pull requests that change files under this folder.

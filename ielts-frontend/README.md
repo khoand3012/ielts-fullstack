@@ -2,7 +2,7 @@
 
 Web frontend for an IELTS practice platform. Students take Reading, Listening, Writing and Speaking tests. Reading and Listening are graded automatically, Writing gets AI feedback (or a teacher's, on request), and Speaking is graded by a teacher.
 
-This repo is the Next.js app. The REST API lives in a separate repo, `ielts-backend` (Python + FastAPI), which this app expects to find next to it at `../ielts-backend`.
+This folder is the Next.js app. The REST API lives in the sibling folder `../ielts-backend` (Python + FastAPI) of the same monorepo. See the [root README](../README.md) for the full setup.
 
 ## Status
 
@@ -21,7 +21,7 @@ This repo is the Next.js app. The REST API lives in a separate repo, `ielts-back
 
 You need Node.js 20 or later (it's developed on 24) and a running backend.
 
-1. Start the backend from `../ielts-backend`. See that repo for database setup.
+1. Start the backend from `../ielts-backend`. See its README for database setup.
 
    ```bash
    uv run uvicorn api.main:app --port 8000
