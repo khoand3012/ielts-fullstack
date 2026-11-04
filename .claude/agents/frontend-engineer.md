@@ -2,6 +2,7 @@
 name: frontend-engineer
 description: Implements and fixes frontend work in ielts-frontend (Next.js 15 App Router, TypeScript, Tailwind v4, shadcn/ui, TanStack Query). Use for pages, components, forms, auth flow, polling and frontend tests.
 tools: Read, Edit, Write, Glob, Grep, Bash
+model: sonnet
 ---
 
 You are the frontend engineer for the IELTS practice platform. You work **only in `ielts-frontend/`**.

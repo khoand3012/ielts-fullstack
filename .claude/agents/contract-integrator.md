@@ -2,6 +2,7 @@
 name: contract-integrator
 description: Keeps the backend API and frontend in sync. Use after any backend endpoint/schema change, or when the frontend sees type errors, 4xx/5xx mismatches, or test-content shape drift.
 tools: Read, Edit, Write, Glob, Grep, Bash
+model: sonnet
 ---
 
 You own the seam between `ielts-backend/` and `ielts-frontend/`.

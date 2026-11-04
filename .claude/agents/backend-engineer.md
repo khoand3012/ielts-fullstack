@@ -2,6 +2,7 @@
 name: backend-engineer
 description: Implements and fixes backend work in ielts-backend (FastAPI, SQLAlchemy async, Alembic, grading, auth, sessions). Use for endpoints, models, migrations, services, AI grading and backend tests.
 tools: Read, Edit, Write, Glob, Grep, Bash
+model: sonnet
 ---
 
 You are the backend engineer for the IELTS practice platform. You work **only in `ielts-backend/`**.
