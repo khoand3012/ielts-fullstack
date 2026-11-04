@@ -98,13 +98,36 @@ async def test_result_graded_listening(
         "correct_choices": ["B"],
         "marks": 1,
         "max_marks": 2,
+        "section": 3,
+        "question_type": "multiple_choice",
     }
+    assert body["sections"] == [{"number": n, "title": f"L{n}"} for n in (1, 2, 3, 4)]
     assert (by[31]["answer"], by[31]["accepted"], by[31]["marks"]) == (
         " Word31 ",
         ["word31", "alt31"],
         1,
     )
     assert by[31]["correct_choices"] is None
+
+
+async def test_result_reading_question_types(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser
+) -> None:
+    user, tok = await make_user()
+    ts = await start(db_session, user, Skill.READING, answers=dict(correct_answers(Skill.READING)))
+    await sessions.submit_session(db_session, user, ts.id, NOW + timedelta(minutes=20))
+    body = await result(app_client, tok, ts)
+
+    by = rows(body)
+    assert (by[1]["section"], by[1]["question_type"]) == (1, "true_false_not_given")
+    assert (by[8]["section"], by[8]["question_type"]) == (1, "fill_blank")
+    assert (by[14]["section"], by[14]["question_type"]) == (2, "multiple_choice")
+    assert (by[27]["section"], by[27]["question_type"]) == (3, "matching")
+    assert body["sections"] == [
+        {"number": 1, "title": "P1"},
+        {"number": 2, "title": "P2"},
+        {"number": 3, "title": "P3"},
+    ]
 
 
 async def test_result_partial_practice(
@@ -308,6 +331,7 @@ async def test_result_writing_graded(
     body = await result(app_client, tok, ts)
     assert (body["status"], body["band"], body["grading_method"]) == ("graded", 6.0, "ai")
     assert body["raw_score"] is None and body["questions"] is None
+    assert body["sections"] is None
     writing = body["writing"]
     assert [t["number"] for t in writing["tasks"]] == [1, 2]
     assert all(len(t["criteria"]) == 4 for t in writing["tasks"])

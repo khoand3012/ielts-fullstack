@@ -46,6 +46,7 @@ class ItemSpec:
     option_keys: frozenset[str] = frozenset()
     max_select: int = 1
     section: int | None = None
+    question_type: str | None = None
 
 
 def parse_content(skill: Skill, data: dict[str, Any]) -> Content:
@@ -85,11 +86,25 @@ def _speaking_questions(content: SpeakingContent) -> Iterator[tuple[int, Speakin
 def _rl_spec(section: int, group: QuestionGroup, item: QuestionItem) -> ItemSpec:
     numbers = tuple(item.numbers)
     options = frozenset(o.key for o in (item.options or group.options or []))
+    qtype = group.variant or group.type
     if group.type == "multiple_choice":
-        return ItemSpec(numbers[0], numbers, "choice", options, len(numbers), section)
+        return ItemSpec(
+            numbers[0], numbers, "choice", options, len(numbers), section, question_type=qtype
+        )
     if group.type == "matching":
-        return ItemSpec(numbers[0], numbers, "single_choice", options, 1, section)
-    return ItemSpec(numbers[0], numbers, "text", section=section)
+        return ItemSpec(
+            numbers[0], numbers, "single_choice", options, 1, section, question_type=qtype
+        )
+    return ItemSpec(numbers[0], numbers, "text", section=section, question_type=qtype)
+
+
+def section_titles(content: Content) -> list[tuple[int, str]]:
+    """Reading passages or Listening parts, in order, as (number, title); [] for other skills."""
+    if isinstance(content, ReadingContent):
+        return [(p.number, p.title) for p in content.passages]
+    if isinstance(content, ListeningContent):
+        return [(p.number, p.title) for p in content.parts]
+    return []
 
 
 def item_index(skill: Skill, content: Content) -> dict[int, ItemSpec]:

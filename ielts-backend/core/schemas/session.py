@@ -86,6 +86,13 @@ class ResultQuestion(BaseModel):
     correct_choices: list[str] | None  # choice only: the student's picks that are right
     marks: int
     max_marks: int
+    section: int  # the passage (Reading) or part (Listening) it belongs to
+    question_type: str  # the group's variant, else its type
+
+
+class ResultSection(BaseModel):
+    number: int
+    title: str
 
 
 _PLAIN_TEXT = "plain text — render as text, never HTML or Markdown"
@@ -142,3 +149,5 @@ class SessionResult(BaseModel):
     questions: list[ResultQuestion] | None
     # AI-graded Writing, once graded; null otherwise
     writing: WritingResult | None = None
+    # Reading passages / Listening parts, when the questions are present; null otherwise
+    sections: list[ResultSection] | None = None
