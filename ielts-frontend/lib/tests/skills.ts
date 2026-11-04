@@ -10,4 +10,4 @@ export const SKILL_LABELS: Record<Skill, string> = {
 };
 
 /** Skills this frontend can run a session for. Grows as each skill's screen lands. */
-export const PLAYABLE_SKILLS: ReadonlySet<Skill> = new Set<Skill>(["reading"]);
+export const PLAYABLE_SKILLS: ReadonlySet<Skill> = new Set<Skill>(["reading", "writing"]);

@@ -192,8 +192,15 @@ test("a submitted session opens straight to the submitted view", async () => {
   expect(router.replace).toHaveBeenCalledWith("/sessions/s-1/result");
 });
 
-test("a writing session shows that the test type isn't available yet", async () => {
+test("a writing session opens the writing screen", async () => {
   backend([makeSession({ skill: "writing", content: structuredClone(writing) })]);
+  renderWithProviders(<SessionScreen sessionId="s-1" />);
+  expect((await screen.findAllByRole("textbox")).length).toBeGreaterThanOrEqual(2);
+  expect(screen.queryByText("This test type isn't available yet")).not.toBeInTheDocument();
+});
+
+test("a speaking session shows that the test type isn't available yet", async () => {
+  backend([makeSession({ skill: "speaking", content: {} })]);
   renderWithProviders(<SessionScreen sessionId="s-1" />);
   expect(await screen.findByText("This test type isn't available yet")).toBeInTheDocument();
 });

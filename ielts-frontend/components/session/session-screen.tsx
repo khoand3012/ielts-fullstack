@@ -8,6 +8,7 @@ import { useSessionQuery } from "@/lib/session/queries";
 import { PLAYABLE_SKILLS } from "@/lib/tests/skills";
 import { ReadingScreen } from "./reading-screen";
 import { SubmittedView } from "./submitted-view";
+import { WritingScreen } from "@/components/writing/writing-screen";
 
 function Message({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
@@ -65,9 +66,17 @@ export function SessionScreen({ sessionId }: { sessionId: string }) {
   const current = query.data.session;
   if (current.status === "submitted") return <SubmittedView session={current} />;
 
-  if (parsed?.skill !== "reading") {
+  if (parsed?.skill !== "reading" && parsed?.skill !== "writing") {
     return <Message title="This test type isn't available yet" />;
   }
+
+  const screenProps = {
+    session: current,
+    offsetMs,
+    expired,
+    onExpire: () => setExpired(true),
+    onClosed: () => void query.refetch(),
+  };
 
   return (
     <>
@@ -79,14 +88,11 @@ export function SessionScreen({ sessionId }: { sessionId: string }) {
           </button>
         </div>
       )}
-      <ReadingScreen
-        session={current}
-        content={parsed.content}
-        offsetMs={offsetMs}
-        expired={expired}
-        onExpire={() => setExpired(true)}
-        onClosed={() => void query.refetch()}
-      />
+      {parsed.skill === "reading" ? (
+        <ReadingScreen {...screenProps} content={parsed.content} />
+      ) : (
+        <WritingScreen {...screenProps} content={parsed.content} />
+      )}
     </>
   );
 }

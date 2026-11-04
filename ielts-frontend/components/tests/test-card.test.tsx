@@ -20,7 +20,13 @@ test("a reading test can be started", () => {
   expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
 });
 
-test.each<Skill>(["speaking", "writing", "listening"])("a %s test shows Coming soon", (skill) => {
+test("a writing test can be started", () => {
+  renderCard("writing");
+  expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+  expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
+});
+
+test.each<Skill>(["speaking", "listening"])("a %s test shows Coming soon", (skill) => {
   renderCard(skill);
   expect(screen.getByText("Coming soon")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
