@@ -1,0 +1,31 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "additionalDirectories": [
+      "./ielts-backend",
+      "./ielts-frontend"
+    ],
+    "allow": [
+      "Read(./ielts-backend/**)",
+      "Read(./ielts-frontend/**)",
+      "Bash(uv run pytest *)",
+      "Bash(uv run ruff *)",
+      "Bash(uv run mypy *)",
+      "Bash(npm test *)",
+      "Bash(npm run lint *)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(npx vitest run *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)"
+    ],
+    "deny": [
+      "Read(./ielts-backend/.env)",
+      "Read(./ielts-frontend/.env.local)",
+      "Edit(./ielts-backend/.env)",
+      "Edit(./ielts-frontend/.env.local)"
+    ]
+  }
+}
