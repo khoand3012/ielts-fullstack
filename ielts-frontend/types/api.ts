@@ -357,6 +357,17 @@ export interface components {
             marks: number;
             /** Max Marks */
             max_marks: number;
+            /** Section */
+            section: number;
+            /** Question Type */
+            question_type: string;
+        };
+        /** ResultSection */
+        ResultSection: {
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
         };
         /**
          * Role
@@ -518,7 +529,9 @@ export interface components {
             answered: number | null;
             /** Questions */
             questions: components["schemas"]["ResultQuestion"][] | null;
-            writing?: components["schemas"]["WritingResult"] | null;
+            writing?: components["schemas"]["WritingResultView"] | null;
+            /** Sections */
+            sections?: components["schemas"]["ResultSection"][] | null;
         };
         /** SessionStartRequest */
         SessionStartRequest: {
@@ -657,20 +670,23 @@ export interface components {
             comments: components["schemas"]["WritingComment"][];
         };
         /**
-         * WritingResult
-         * @description The AI's feedback on a Writing session, as stored on the assessment and served.
+         * WritingResultView
+         * @description `WritingResult` as served, with each task's essay text.
          */
-        WritingResult: {
+        WritingResultView: {
             /** Tasks */
-            tasks: components["schemas"]["WritingTask"][];
+            tasks: components["schemas"]["WritingTaskView"][];
             /**
              * Focus
              * @description The changes most likely to lift the band, most important first; plain text — render as text, never HTML or Markdown
              */
             focus: string[];
         };
-        /** WritingTask */
-        WritingTask: {
+        /**
+         * WritingTaskView
+         * @description A graded task as served: the feedback plus the essay as saved.
+         */
+        WritingTaskView: {
             /** Number */
             number: number;
             /** Band */
@@ -679,6 +695,8 @@ export interface components {
             word_count: number;
             /** Criteria */
             criteria: components["schemas"]["WritingCriterion"][];
+            /** Text */
+            text: string;
         };
     };
     responses: never;

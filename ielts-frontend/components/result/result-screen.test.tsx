@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { SessionResult } from "@/lib/api/types";
 import { POLL_CAP_MS, pollDelay } from "@/lib/result/queries";
-import { makeResult } from "@/tests/fixtures/result";
+import { makeResult, makeWritingResult } from "@/tests/fixtures/result";
 import { server } from "@/tests/msw/server";
 import { renderWithProviders } from "@/tests/render";
 import { resetRouter, router } from "@/tests/router";
@@ -39,6 +39,8 @@ test("graded Reading shows the score header and every question", async () => {
           correct_choices: ["A"],
           marks: 1,
           max_marks: 2,
+          section: 2,
+          question_type: "multiple_choice",
         },
       ],
     }),
@@ -120,40 +122,7 @@ test("a 404 shows not found without retrying", async () => {
 });
 
 test("graded Writing shows bands, comments, a blank task and the focus list", async () => {
-  serve(
-    makeResult({
-      skill: "writing",
-      module: null,
-      raw_score: null,
-      max_score: null,
-      answered: null,
-      questions: null,
-      band: 6.5,
-      grading_method: "ai",
-      writing: {
-        focus: ["Vary your sentence openings", "Check article use"],
-        tasks: [
-          {
-            number: 1,
-            band: 6,
-            word_count: 172,
-            criteria: [
-              {
-                criterion: "task_achievement",
-                band: 6,
-                comments: [
-                  { comment: "Covers the key trends.", quote: "the graph go up", suggestion: "the graph rises" },
-                  { comment: "No overview given.", quote: null, suggestion: null },
-                ],
-              },
-              { criterion: "lexical_resource", band: 6.5, comments: [] },
-            ],
-          },
-          { number: 2, band: null, word_count: 0, criteria: [] },
-        ],
-      },
-    }),
-  );
+  serve(makeWritingResult());
   renderWithProviders(<ResultScreen sessionId="s-1" />);
   expect(await screen.findByRole("heading", { name: "Task 1" })).toBeInTheDocument();
   expect(screen.getByText("6.5", { selector: "dd" })).toBeInTheDocument();
@@ -190,6 +159,7 @@ test("script-like text in answers and comments renders as text", async () => {
             number: 1,
             band: 5,
             word_count: 3,
+            text: "x",
             criteria: [
               {
                 criterion: "task_response",

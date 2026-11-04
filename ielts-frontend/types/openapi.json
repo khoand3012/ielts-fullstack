@@ -1104,6 +1104,14 @@
      "max_marks": {
       "type": "integer",
       "title": "Max Marks"
+     },
+     "section": {
+      "type": "integer",
+      "title": "Section"
+     },
+     "question_type": {
+      "type": "string",
+      "title": "Question Type"
      }
     },
     "type": "object",
@@ -1115,9 +1123,29 @@
      "accepted",
      "correct_choices",
      "marks",
-     "max_marks"
+     "max_marks",
+     "section",
+     "question_type"
     ],
     "title": "ResultQuestion"
+   },
+   "ResultSection": {
+    "properties": {
+     "number": {
+      "type": "integer",
+      "title": "Number"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     }
+    },
+    "type": "object",
+    "required": [
+     "number",
+     "title"
+    ],
+    "title": "ResultSection"
    },
    "Role": {
     "type": "string",
@@ -1597,12 +1625,26 @@
      "writing": {
       "anyOf": [
        {
-        "$ref": "#/components/schemas/WritingResult"
+        "$ref": "#/components/schemas/WritingResultView"
        },
        {
         "type": "null"
        }
       ]
+     },
+     "sections": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/ResultSection"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sections"
      }
     },
     "type": "object",
@@ -1956,11 +1998,11 @@
     ],
     "title": "WritingCriterion"
    },
-   "WritingResult": {
+   "WritingResultView": {
     "properties": {
      "tasks": {
       "items": {
-       "$ref": "#/components/schemas/WritingTask"
+       "$ref": "#/components/schemas/WritingTaskView"
       },
       "type": "array",
       "title": "Tasks"
@@ -1979,10 +2021,10 @@
      "tasks",
      "focus"
     ],
-    "title": "WritingResult",
-    "description": "The AI's feedback on a Writing session, as stored on the assessment and served."
+    "title": "WritingResultView",
+    "description": "`WritingResult` as served, with each task's essay text."
    },
-   "WritingTask": {
+   "WritingTaskView": {
     "properties": {
      "number": {
       "type": "integer",
@@ -2009,6 +2051,10 @@
       },
       "type": "array",
       "title": "Criteria"
+     },
+     "text": {
+      "type": "string",
+      "title": "Text"
      }
     },
     "type": "object",
@@ -2016,9 +2062,11 @@
      "number",
      "band",
      "word_count",
-     "criteria"
+     "criteria",
+     "text"
     ],
-    "title": "WritingTask"
+    "title": "WritingTaskView",
+    "description": "A graded task as served: the feedback plus the essay as saved."
    }
   },
   "securitySchemes": {
