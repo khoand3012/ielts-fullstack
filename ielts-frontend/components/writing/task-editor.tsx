@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
-
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import type { WritingContent } from "@/lib/content/schema";
-import { clampEssay, countWords, wordCountTone } from "@/lib/writing/words";
-import { cn } from "cn";
+import { MAX_ESSAY_CHARS, clampEssay, countWords, wordCountTone } from "@/lib/writing/words";
+import { cn } from "@/lib/utils";
 
 type Task = WritingContent["tasks"][number];
 
@@ -18,15 +16,14 @@ interface TaskEditorProps {
 }
 
 export function TaskEditor({ task, value, onChange, readOnly }: TaskEditorProps) {
-  const [tooLong, setTooLong] = useState(false);
+  const tooLong = value.length >= MAX_ESSAY_CHARS;
   const textareaId = `task-${task.number}-answer`;
   const count = countWords(value);
   const tone = wordCountTone(count, task.min_words);
 
   function handleChange(next: string) {
-    const clamped = clampEssay(next);
-    setTooLong(clamped.truncated);
-    onChange(clamped.text);
+    // Backstop only: maxLength makes the browser refuse overflow at the caret.
+    onChange(clampEssay(next).text);
   }
 
   return (
@@ -48,6 +45,7 @@ export function TaskEditor({ task, value, onChange, readOnly }: TaskEditorProps)
           id={textareaId}
           value={value}
           readOnly={readOnly}
+          maxLength={MAX_ESSAY_CHARS}
           spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"
@@ -67,7 +65,7 @@ export function TaskEditor({ task, value, onChange, readOnly }: TaskEditorProps)
         {tooLong ? (
           <Alert variant="destructive">
             <AlertDescription>
-              Your answer was too long and has been shortened to the maximum length.
+              Your answer is too long. The limit is {MAX_ESSAY_CHARS.toLocaleString("en-US")} characters, so any extra text was not added.
             </AlertDescription>
           </Alert>
         ) : null}

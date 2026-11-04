@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TaskEditor } from "@/components/writing/task-editor";
@@ -54,15 +55,43 @@ describe("TaskEditor", () => {
     expect(screen.getByText("150 / 150 words")).toHaveAttribute("data-tone", "ok");
   });
 
-  it("clamps oversized paste and alerts, clearing when value drops", () => {
+  it("sets maxLength on the textarea", () => {
+    render(<TaskEditor task={baseTask} value="" onChange={() => {}} />);
+    expect(screen.getByRole("textbox")).toHaveAttribute("maxlength", "20000");
+  });
+
+  it("clamps programmatic oversized values as a backstop", () => {
     const onChange = vi.fn();
-    const { rerender } = render(<TaskEditor task={baseTask} value="" onChange={onChange} />);
+    render(<TaskEditor task={baseTask} value="" onChange={onChange} />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "a".repeat(20001) } });
     expect(onChange).toHaveBeenCalledWith("a".repeat(20000));
+  });
+
+  it("mid-text overflowing paste cuts the pasted text, keeping the existing tail", async () => {
+    const user = userEvent.setup();
+    const original = "START" + "x".repeat(19900 - 8) + "END";
+    function Harness() {
+      const [v, setV] = useState(original);
+      return <TaskEditor task={baseTask} value={v} onChange={setV} />;
+    }
+    render(<Harness />);
+    const box = screen.getByRole("textbox") as HTMLTextAreaElement;
+    box.focus();
+    box.setSelectionRange(5, 5);
+    await user.paste("p".repeat(500));
+    expect(box.value.length).toBe(20000);
+    expect(box.value.startsWith("START")).toBe(true);
+    expect(box.value.endsWith("END")).toBe(true);
     expect(screen.getByRole("alert")).toHaveTextContent(/too long/i);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "abc" } });
+  });
+
+  it("shows the too-long alert only while value is at the cap", () => {
+    const { rerender } = render(
+      <TaskEditor task={baseTask} value={"a".repeat(20000)} onChange={() => {}} />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/too long/i);
+    rerender(<TaskEditor task={baseTask} value="abc" onChange={() => {}} />);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    rerender(<TaskEditor task={baseTask} value="abc" onChange={onChange} />);
   });
 
   it("renders prompt as text, not HTML", () => {
