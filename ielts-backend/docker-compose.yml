@@ -40,9 +40,10 @@ services:
       postgres:
         condition: service_healthy
 
-  # R2_ENDPOINT_URL stays http://localhost:9000 from .env: the API only signs URLs (no network
-  # call) and the browser must be able to reach them. Uploads happen in `core.cli load-test`,
-  # which runs on the host.
+  # R2_ENDPOINT_URL stays http://localhost:9000 from .env, because the browser must reach the
+  # URLs the API signs with it. The API's own reads (the Writing chart sent to the AI grader)
+  # go to MinIO by its service name instead. Uploads happen in `core.cli load-test`, which
+  # runs on the host.
   api:
     build: .
     image: ielts-backend
@@ -51,6 +52,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://ielts:ielts@postgres:5432/ielts
+      R2_INTERNAL_ENDPOINT_URL: http://minio:9000
     depends_on:
       migrate:
         condition: service_completed_successfully

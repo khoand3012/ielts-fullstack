@@ -8,7 +8,7 @@
         "number": 1,
         "prompt": "The chart below shows the percentage of journeys to work made by four types of transport in a European city in 2000, 2010 and 2020.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant.\n\nWrite at least 150 words.",
         "min_words": 150,
-        "image": "tests/practice-01-writing/task1.svg"
+        "image": "tests/practice-01-writing/task1.png"
       },
       {
         "number": 2,
@@ -19,6 +19,11 @@
     ]
   },
   "assets": {
-    "tests/practice-01-writing/task1.svg": "assets/practice-01-writing-task1.svg"
+    "tests/practice-01-writing/task1.png": "assets/practice-01-writing-task1.png"
+  },
+  "staff_content": {
+    "examiner_notes": {
+      "1": "Percentage of journeys to work, 2000 / 2010 / 2020. Car: 62 / 54 / 41. Bus: 18 / 20 / 22. Bicycle: 5 / 9 / 17. Walking: 15 / 17 / 20. A good overview notes that the car stays the most common way to travel but its share falls by about a third, while every other mode rises; cycling more than triples and becomes almost as common as walking and the bus by 2020."
+    }
   }
 }

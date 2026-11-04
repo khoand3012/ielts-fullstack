@@ -18,6 +18,7 @@ from core.schemas.content import (
     ReadingContent,
     SpeakingContent,
     SpeakingQuestion,
+    StaffContent,
     WritingContent,
 )
 
@@ -31,6 +32,8 @@ _CONTENT_MODELS: dict[Skill, type[BaseModel]] = {
 # Fixed IELTS structure: sections per skill, and the question numbers Reading/Listening use.
 _SECTION_COUNTS = {Skill.READING: 3, Skill.LISTENING: 4}
 _RL_NUMBERS = list(range(1, 41))
+# Image types the AI grader can send to the model (OpenRouter takes no SVG).
+RASTER_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
 
 ItemKind = Literal["choice", "single_choice", "text", "essay", "recording"]
 
@@ -119,17 +122,30 @@ def _blank(text: str | None) -> bool:
     return text is None or not text.strip()
 
 
-def validate_version(skill: Skill, content: Content, answer_key: AnswerKey) -> list[Problem]:
+def validate_version(
+    skill: Skill,
+    content: Content,
+    answer_key: AnswerKey,
+    staff_content: StaffContent | None = None,
+) -> list[Problem]:
     """Every problem in a version. Any `error` blocks publishing."""
     problems: list[Problem] = []
     index = item_index(skill, content)
+    staff = staff_content or StaffContent()
 
     if isinstance(content, ReadingContent | ListeningContent):
         problems += _validate_rl(skill, content, index, answer_key)
     elif isinstance(content, WritingContent):
         problems += _validate_writing(content)
+        problems += _validate_examiner_notes(content, staff)
     elif isinstance(content, SpeakingContent):
         problems += _validate_speaking(content)
+    if staff.examiner_notes and not isinstance(content, WritingContent):
+        problems.append(
+            Problem(
+                code="examiner_note_not_writing", message="only writing tests have examiner notes"
+            )
+        )
 
     for number in answer_key:
         if number not in index or skill in (Skill.WRITING, Skill.SPEAKING):
@@ -231,7 +247,28 @@ def _validate_writing(content: WritingContent) -> list[Problem]:
     for task in content.tasks:
         if task.number == 1 and task.image is None:
             problems.append(Problem(code="missing_image", message="task 1 has no image", section=1))
+        if task.image is not None and not task.image.lower().endswith(RASTER_IMAGE_EXTENSIONS):
+            problems.append(
+                Problem(
+                    code="unsupported_image",
+                    message=f"task {task.number} image must be PNG, JPEG or WebP",
+                    section=task.number,
+                )
+            )
     return problems
+
+
+def _validate_examiner_notes(content: WritingContent, staff: StaffContent) -> list[Problem]:
+    tasks = {t.number for t in content.tasks}
+    return [
+        Problem(
+            code="unknown_examiner_note",
+            message=f"examiner note for task {n}, which does not exist",
+            section=n,
+        )
+        for n in sorted(staff.examiner_notes)
+        if n not in tasks
+    ]
 
 
 def _validate_speaking(content: SpeakingContent) -> list[Problem]:

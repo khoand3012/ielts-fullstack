@@ -1,18 +1,35 @@
 import dataclasses
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal as D
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.models import SessionMode, Skill, TestSession, TestVersion, User
+from core.models import (
+    AIAssessment,
+    AssessmentStatus,
+    Role,
+    SessionMode,
+    Skill,
+    TestSession,
+    TestVersion,
+    User,
+)
 from core.schemas.session import AnswerInput
-from core.services import sessions
+from core.services import ai_grading, ai_review, sessions
+from core.services.ai_grading import GradingRunner
+from core.settings import get_settings
+from tests.ai_helpers import FakeOpenRouter, completion, model_output
+from tests.content_factories import writing_staff
 from tests.helpers import correct_answers, publish_test
+from tests.test_ai_grading import BOTH
 
 MakeUser = Callable[..., Awaitable[tuple[User, str]]]
+Runner = tuple[GradingRunner, FakeOpenRouter]
 NOW = datetime(2026, 10, 26, 9, 0, tzinfo=UTC)
 
 
@@ -263,3 +280,123 @@ async def test_result_logs_drift_and_keeps_stored_total(
     assert log.events == [
         ("auto_grading_drift", {"session_id": str(ts.id), "stored": 40, "recomputed": 39})
     ]
+
+
+async def writing_submitted(
+    client: AsyncClient,
+    db: AsyncSession,
+    user: User,
+    tok: str,
+    essays: dict[int, Any],
+    mode: SessionMode = SessionMode.EXAM,
+) -> TestSession:
+    ts = await start(db, user, Skill.WRITING, mode, answers=essays)
+    resp = await client.post(f"/sessions/{ts.id}/submit", headers=h(tok))
+    assert resp.status_code == 200, resp.text
+    await ai_grading.drain()
+    return ts
+
+
+async def test_result_writing_graded(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
+) -> None:
+    _, fake = ai_installed
+    fake.responses = [completion(model_output())]
+    user, tok = await make_user()
+    ts = await writing_submitted(app_client, db_session, user, tok, BOTH)
+
+    body = await result(app_client, tok, ts)
+    assert (body["status"], body["band"], body["grading_method"]) == ("graded", 6.0, "ai")
+    assert body["raw_score"] is None and body["questions"] is None
+    writing = body["writing"]
+    assert [t["number"] for t in writing["tasks"]] == [1, 2]
+    assert all(len(t["criteria"]) == 4 for t in writing["tasks"])
+    assert [t["band"] for t in writing["tasks"]] == [6.0, 6.0]
+    assert writing["focus"]
+
+
+async def test_result_writing_being_graded_states(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser
+) -> None:
+    user, tok = await make_user()
+    for status in (AssessmentStatus.PROCESSING, AssessmentStatus.HELD, AssessmentStatus.FAILED):
+        ts = await writing_submitted(app_client, db_session, user, tok, BOTH)
+        await db_session.execute(
+            update(AIAssessment)
+            .where(AIAssessment.test_session_id == ts.id)
+            .values(status=status, band=D("6.0"), result={"tasks": [], "focus": []})
+        )
+        await db_session.commit()
+        body = await result(app_client, tok, ts)
+        assert (body["status"], body["writing"], body["band"]) == ("being_graded", None, None)
+
+
+async def test_result_practice_blank_task(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
+) -> None:
+    _, fake = ai_installed
+    fake.responses = [completion(model_output(tasks=(2,)))]
+    user, tok = await make_user()
+    ts = await writing_submitted(
+        app_client, db_session, user, tok, {2: BOTH[2]}, SessionMode.PRACTICE
+    )
+
+    body = await result(app_client, tok, ts)
+    assert (body["status"], body["band"]) == ("graded", None)
+    task1, task2 = body["writing"]["tasks"]
+    assert (task1["band"], task1["criteria"]) == (None, [])
+    assert task2["band"] == 6.0
+
+
+async def test_result_hides_internals(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
+) -> None:
+    _, fake = ai_installed
+    fake.responses = [completion(model_output())]
+    user, tok = await make_user()
+    ts = await writing_submitted(app_client, db_session, user, tok, BOTH)
+
+    resp = await app_client.get(f"/sessions/{ts.id}/result", headers=h(tok))
+    assert resp.json()["status"] == "graded"
+    note = writing_staff()["examiner_notes"][1]
+    for secret in (
+        "raw_responses",
+        "signals",
+        "manipulation",
+        "prompt_version",
+        "writing-academic-v1",
+        get_settings().ai_model,
+        note,
+    ):
+        assert secret not in resp.text
+
+
+async def test_session_list_carries_writing_band(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
+) -> None:
+    _, fake = ai_installed
+    fake.responses = [completion(model_output())]
+    user, tok = await make_user()
+    ts = await writing_submitted(app_client, db_session, user, tok, BOTH)
+
+    resp = await app_client.get("/sessions", headers=h(tok))
+    [item] = [i for i in resp.json()["items"] if i["id"] == str(ts.id)]
+    assert item["band"] == 6.0
+
+
+async def test_result_graded_after_release(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
+) -> None:
+    _, fake = ai_installed
+    fake.responses = [completion(model_output(manipulation=True))]
+    user, tok = await make_user()
+    admin, _ = await make_user(Role.ADMIN)
+    ts = await writing_submitted(app_client, db_session, user, tok, BOTH)
+    assert (await result(app_client, tok, ts))["status"] == "being_graded"
+
+    row = await db_session.scalar(select(AIAssessment).where(AIAssessment.test_session_id == ts.id))
+    assert row is not None and row.status == AssessmentStatus.HELD
+    await ai_review.release_held(db_session, row.id, admin.email)
+
+    body = await result(app_client, tok, ts)
+    assert (body["status"], body["band"]) == ("graded", 6.0)

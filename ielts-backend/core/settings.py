@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     refresh_token_ttl_seconds: int = 2_592_000
 
     r2_endpoint_url: str
+    # Where this process itself reaches storage, if not at r2_endpoint_url (which signed
+    # URLs use, so browsers must reach it): e.g. http://minio:9000 inside Docker Compose.
+    r2_internal_endpoint_url: str | None = None
     r2_access_key_id: str
     r2_secret_access_key: str
     r2_bucket: str
@@ -20,7 +23,23 @@ class Settings(BaseSettings):
     signed_url_ttl_seconds: int = 14_400
 
     openrouter_api_key: str
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
     ai_model: str = "deepseek/deepseek-v4.1-flash-1017"
+    # AI Writing grading runs in-process (one app process). Off in tests: they install a runner.
+    ai_grading_enabled: bool = True
+    ai_max_attempts: int = 3
+    # Attempt n waits ai_backoff_seconds * 4 ** (n - 1) before the next: 2 s, then 8 s.
+    ai_backoff_seconds: float = 2
+    ai_request_timeout_seconds: float = 120
+    ai_max_concurrency: int = 4
+    # Includes the model's reasoning, which is often over half of a reply.
+    ai_max_output_tokens: int = 12000
+    ai_temperature: float = 0
+    # OpenRouter providers never to route grading to: they accept the JSON schema but
+    # don't enforce it (checked with scripts/ai_check.py).
+    ai_provider_ignore: list[str] = ["venice"]
+    # On startup, re-run grading jobs a restart interrupted (`processing` rows only).
+    ai_resume_on_startup: bool = True
 
     free_writing_daily: int = 3
     free_speaking_daily: int = 3

@@ -80,7 +80,7 @@ async def test_assets_are_signed_urls(
 ) -> None:
     _, tok = await make_user()
     writing = await start(app_client, db_session, tok, Skill.WRITING)
-    assert writing["content"]["tasks"][0]["image"] == "https://signed/tests/f/task1.svg"
+    assert writing["content"]["tasks"][0]["image"] == "https://signed/tests/f/task1.png"
     listening = await start(app_client, db_session, tok, Skill.LISTENING)
     assert listening["content"]["parts"][3]["audio"] == "https://signed/tests/f/part4.mp3"
 
@@ -254,3 +254,9 @@ async def test_in_progress_session_has_null_score(
     assert (body["module"], body["raw_score"], body["band"]) == ("academic", None, None)
     got = (await app_client.get(f"/sessions/{body['id']}", headers=h(tok))).json()
     assert (got["module"], got["raw_score"], got["band"]) == ("academic", None, None)
+
+
+async def test_openapi_writing_result_plain_text(app_client: AsyncClient) -> None:
+    schemas = (await app_client.get("/openapi.json")).json()["components"]["schemas"]
+    assert "plain text" in schemas["WritingComment"]["properties"]["comment"]["description"]
+    assert "WritingResult" in json.dumps(schemas["SessionResult"])

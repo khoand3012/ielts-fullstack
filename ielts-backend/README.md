@@ -35,8 +35,9 @@ A simple modular monolith: **one deployable, one process.** The FastAPI app in `
 layer; business logic lives in `core/`. The only backing services are Postgres and R2 (MinIO
 locally).
 
-AI grading of Writing (later phases) will run as an in-process background task after the request
-returns, with the `AIAssessment` row in Postgres acting as the job record. Speaking is graded by
+AI grading of Writing (Academic) runs as an in-process `asyncio` task started once the submission
+commits, with the `AIAssessment` row in Postgres acting as the job record; rows still `processing`
+are resumed on startup. Speaking is graded by
 teachers. A separate worker + queue is deliberately deferred until load requires it.
 
 ```
@@ -114,6 +115,9 @@ After that, admins manage other users' roles through `PATCH /admin/users/{user_i
 | `uv run python -m core.cli set-role <email> <role>` | Set a user's role (`student`/`teacher`/`admin`) |
 | `uv run python -m core.cli load-test <file.json> [--publish]` | Load a test as a draft (and publish it if it has no problems) |
 | `uv run python -m core.cli regrade-auto [--all]` | Score Reading/Listening sessions with no score; `--all` re-scores every one |
+| `uv run python -m core.cli regrade-ai` | Retry AI grading of every failed Writing session |
+| `uv run python -m core.cli held-ai list\|show <id>\|release <id> --by <admin-email>` | Review Writing grades held for suspected manipulation; `release` publishes the AI grade |
+| `uv run python scripts/ai_check.py seed\|redteam` | Check AI grading against the real model (needs a real `OPENROUTER_API_KEY`): the seed test twice, or the prompt-injection attacks |
 | `uv run alembic revision --autogenerate -m "msg"` | Create a migration |
 | `uv run pytest` | Run tests |
 | `uv run ruff check . && uv run ruff format --check . && uv run mypy .` | Lint, format, type check |
@@ -127,12 +131,23 @@ All settings are read through `core/settings.py` (`pydantic-settings`); nothing 
 |---|---|---|---|
 | `DATABASE_URL` | yes | — | Async Postgres DSN (`postgresql+asyncpg://…`) |
 | `JWT_SECRET` | yes | — | Signing secret for access/refresh tokens |
-| `R2_ENDPOINT_URL` | yes | — | R2/S3 endpoint (MinIO locally) |
+| `R2_ENDPOINT_URL` | yes | — | R2/S3 endpoint (MinIO locally); signed URLs use it, so browsers must reach it |
+| `R2_INTERNAL_ENDPOINT_URL` | no | — | Where the API itself reaches storage, if different (Docker Compose sets `http://minio:9000`) |
 | `R2_ACCESS_KEY_ID` | yes | — | R2 access key |
 | `R2_SECRET_ACCESS_KEY` | yes | — | R2 secret key |
 | `R2_BUCKET` | yes | — | Bucket for audio and test assets |
 | `OPENROUTER_API_KEY` | yes | — | OpenRouter API key (AI grading) |
-| `AI_MODEL` | no | `deepseek/deepseek-v4.1-flash-1017` | OpenRouter model ID used for AI grading |
+| `AI_MODEL` | no | `deepseek/deepseek-v4.1-flash-1017` | OpenRouter model ID used for AI grading (must accept images and structured outputs) |
+| `OPENROUTER_BASE_URL` | no | `https://openrouter.ai/api/v1` | OpenRouter API base URL |
+| `AI_GRADING_ENABLED` | no | `true` | Grade Writing with the AI after submission |
+| `AI_RESUME_ON_STARTUP` | no | `true` | On startup, resume AI grading left `processing` by a restart |
+| `AI_MAX_ATTEMPTS` | no | `3` | Model calls per grading before it is marked failed |
+| `AI_BACKOFF_SECONDS` | no | `2` | Wait before retry *n* is this × 4^(n−1) |
+| `AI_REQUEST_TIMEOUT_SECONDS` | no | `120` | Timeout of one model call |
+| `AI_MAX_CONCURRENCY` | no | `4` | Gradings in flight at once |
+| `AI_MAX_OUTPUT_TOKENS` | no | `12000` | Output token cap per call, reasoning included |
+| `AI_PROVIDER_IGNORE` | no | `["venice"]` | OpenRouter providers never used for grading (JSON list) |
+| `AI_TEMPERATURE` | no | `0` | Sampling temperature |
 | `ACCESS_TOKEN_TTL_SECONDS` | no | `900` | Access token lifetime (15 min) |
 | `REFRESH_TOKEN_TTL_SECONDS` | no | `2592000` | Refresh token lifetime (30 days) |
 | `FREE_WRITING_DAILY` | no | `3` | Free-tier Writing assessments per day |
@@ -170,7 +185,7 @@ Never commit a real `.env`.
 | `PUT` | `/sessions/{id}/answers` | Autosave answers (`null` clears one); 409 once closed |
 | `PATCH` | `/sessions/{id}` | Writing: `request_manual_grading` |
 | `POST` | `/sessions/{id}/submit` | Submit early; Reading/Listening come back already scored |
-| `GET` | `/sessions/{id}/result` | Result: mark, band and per-question answers with the answer key (submitted sessions only; 409 before) |
+| `GET` | `/sessions/{id}/result` | Result: mark, band and per-question answers with the answer key; for Writing, `being_graded` until the AI grade is ready, then bands, criterion feedback and focus points under `writing` (submitted sessions only; 409 before) |
 
 Access tokens live 15 minutes, refresh tokens 30 days. Refresh tokens **rotate on use** — the
 presented token is revoked as the new pair is issued, so replaying an old one returns 401.
