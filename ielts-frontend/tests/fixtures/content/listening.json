@@ -1,0 +1,497 @@
+{
+ "parts": [
+  {
+   "number": 1,
+   "title": "Enrolling on an evening course",
+   "audio": null,
+   "question_groups": [
+    {
+     "type": "fill_blank",
+     "instructions": "Complete the form below. Write ONE WORD AND/OR A NUMBER for each answer.",
+     "word_limit": "ONE WORD AND/OR A NUMBER",
+     "title": "Riverside Community Centre - Course Enrolment Form",
+     "questions": [
+      {
+       "numbers": [
+        1
+       ],
+       "prompt": "Course: Introduction to ____"
+      },
+      {
+       "numbers": [
+        2
+       ],
+       "prompt": "Day: ____ evenings"
+      },
+      {
+       "numbers": [
+        3
+       ],
+       "prompt": "Surname: ____"
+      },
+      {
+       "numbers": [
+        4
+       ],
+       "prompt": "Postcode: ____"
+      },
+      {
+       "numbers": [
+        5
+       ],
+       "prompt": "Phone number: ____"
+      },
+      {
+       "numbers": [
+        6
+       ],
+       "prompt": "Heard about the course from a poster in the ____"
+      },
+      {
+       "numbers": [
+        7
+       ],
+       "prompt": "Fee (residents' rate): £____"
+      },
+      {
+       "numbers": [
+        8
+       ],
+       "prompt": "Must bring: an ____"
+      },
+      {
+       "numbers": [
+        9
+       ],
+       "prompt": "Classes start at: ____ pm"
+      },
+      {
+       "numbers": [
+        10
+       ],
+       "prompt": "Free parking behind the ____"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "title": "Welcome talk for new volunteers",
+   "audio": null,
+   "question_groups": [
+    {
+     "type": "multiple_choice",
+     "instructions": "Choose the correct letter, A, B or C.",
+     "questions": [
+      {
+       "numbers": [
+        11
+       ],
+       "prompt": "The visitor centre opened in",
+       "options": [
+        {
+         "key": "A",
+         "text": "1998."
+        },
+        {
+         "key": "B",
+         "text": "2006."
+        },
+        {
+         "key": "C",
+         "text": "the late 1990s."
+        }
+       ]
+      },
+      {
+       "numbers": [
+        12
+       ],
+       "prompt": "According to the speaker, most visitors come to the reserve to see",
+       "options": [
+        {
+         "key": "A",
+         "text": "rare plants."
+        },
+        {
+         "key": "B",
+         "text": "the woodland in spring."
+        },
+        {
+         "key": "C",
+         "text": "birds on the wetland."
+        }
+       ]
+      },
+      {
+       "numbers": [
+        13
+       ],
+       "prompt": "Volunteers must bring their own",
+       "options": [
+        {
+         "key": "A",
+         "text": "gloves."
+        },
+        {
+         "key": "B",
+         "text": "boots."
+        },
+        {
+         "key": "C",
+         "text": "waterproof jackets."
+        }
+       ]
+      },
+      {
+       "numbers": [
+        14
+       ],
+       "prompt": "Volunteers working alone must",
+       "options": [
+        {
+         "key": "A",
+         "text": "carry a radio."
+        },
+        {
+         "key": "B",
+         "text": "tell the office where they will be."
+        },
+        {
+         "key": "C",
+         "text": "stay close to the visitor centre."
+        }
+       ]
+      },
+      {
+       "numbers": [
+        15
+       ],
+       "prompt": "In the cafe, volunteers receive",
+       "options": [
+        {
+         "key": "A",
+         "text": "a free hot drink."
+        },
+        {
+         "key": "B",
+         "text": "free food."
+        },
+        {
+         "key": "C",
+         "text": "a twenty per cent discount."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "matching",
+     "instructions": "When does each activity take place? Choose the correct letter, A, B or C, next to Questions 16-20. You may use any letter more than once.",
+     "options": [
+      {
+       "key": "A",
+       "text": "Monday"
+      },
+      {
+       "key": "B",
+       "text": "Wednesday"
+      },
+      {
+       "key": "C",
+       "text": "Saturday"
+      }
+     ],
+     "questions": [
+      {
+       "numbers": [
+        16
+       ],
+       "prompt": "bird counting"
+      },
+      {
+       "numbers": [
+        17
+       ],
+       "prompt": "path maintenance"
+      },
+      {
+       "numbers": [
+        18
+       ],
+       "prompt": "hedge planting"
+      },
+      {
+       "numbers": [
+        19
+       ],
+       "prompt": "guiding school groups"
+      },
+      {
+       "numbers": [
+        20
+       ],
+       "prompt": "litter picking"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "number": 3,
+   "title": "Tutorial: a presentation on canteen food waste",
+   "audio": null,
+   "question_groups": [
+    {
+     "type": "multiple_choice",
+     "instructions": "Choose TWO letters, A-E.",
+     "questions": [
+      {
+       "numbers": [
+        21,
+        22
+       ],
+       "prompt": "Which TWO causes of food waste did the students' research identify as the most important?",
+       "options": [
+        {
+         "key": "A",
+         "text": "high prices"
+        },
+        {
+         "key": "B",
+         "text": "large portions"
+        },
+        {
+         "key": "C",
+         "text": "poor-quality food"
+        },
+        {
+         "key": "D",
+         "text": "unfamiliar dishes"
+        },
+        {
+         "key": "E",
+         "text": "lack of time to eat"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "multiple_choice",
+     "instructions": "Choose the correct letter, A, B or C.",
+     "questions": [
+      {
+       "numbers": [
+        23
+       ],
+       "prompt": "How will the students begin their presentation?",
+       "options": [
+        {
+         "key": "A",
+         "text": "with some statistics"
+        },
+        {
+         "key": "B",
+         "text": "with a video clip"
+        },
+        {
+         "key": "C",
+         "text": "with a question to the audience"
+        }
+       ]
+      },
+      {
+       "numbers": [
+        24
+       ],
+       "prompt": "What does the tutor say about the figure from the Canadian study?",
+       "options": [
+        {
+         "key": "A",
+         "text": "It should be removed from the presentation."
+        },
+        {
+         "key": "B",
+         "text": "It should be presented only as an example."
+        },
+        {
+         "key": "C",
+         "text": "It should be checked with the catering manager."
+        }
+       ]
+      },
+      {
+       "numbers": [
+        25
+       ],
+       "prompt": "Why does the tutor say the recommendations must be realistic?",
+       "options": [
+        {
+         "key": "A",
+         "text": "The catering manager will be in the audience."
+        },
+        {
+         "key": "B",
+         "text": "The presentation will be assessed on them."
+        },
+        {
+         "key": "C",
+         "text": "Other students have made similar suggestions."
+        }
+       ]
+      },
+      {
+       "numbers": [
+        26
+       ],
+       "prompt": "What does the tutor advise the students to do with their slides?",
+       "options": [
+        {
+         "key": "A",
+         "text": "add more images"
+        },
+        {
+         "key": "B",
+         "text": "reduce the number"
+        },
+        {
+         "key": "C",
+         "text": "use them as a handout"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "matching",
+     "instructions": "What do the students say about each source? Choose FOUR answers from the box and write the correct letter, A-E, next to Questions 27-30.",
+     "options": [
+      {
+       "key": "A",
+       "text": "It was out of date."
+      },
+      {
+       "key": "B",
+       "text": "It was too technical."
+      },
+      {
+       "key": "C",
+       "text": "It gave them the idea for the project."
+      },
+      {
+       "key": "D",
+       "text": "It provided the most useful data."
+      },
+      {
+       "key": "E",
+       "text": "It was difficult to get hold of."
+      }
+     ],
+     "questions": [
+      {
+       "numbers": [
+        27
+       ],
+       "prompt": "the government report"
+      },
+      {
+       "numbers": [
+        28
+       ],
+       "prompt": "the environmental scientist's article"
+      },
+      {
+       "numbers": [
+        29
+       ],
+       "prompt": "the documentary"
+      },
+      {
+       "numbers": [
+        30
+       ],
+       "prompt": "the canteen's records"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "number": 4,
+   "title": "Lecture: the history of the pencil",
+   "audio": null,
+   "question_groups": [
+    {
+     "type": "fill_blank",
+     "instructions": "Complete the notes below. Write ONE WORD AND/OR A NUMBER for each answer.",
+     "word_limit": "ONE WORD AND/OR A NUMBER",
+     "title": "The history of the pencil",
+     "questions": [
+      {
+       "numbers": [
+        31
+       ],
+       "prompt": "Graphite found in Borrowdale; shepherds used it to mark their ____"
+      },
+      {
+       "numbers": [
+        32
+       ],
+       "prompt": "People wrongly believed it was a type of ____"
+      },
+      {
+       "numbers": [
+        33
+       ],
+       "prompt": "Also used to line moulds for making ____"
+      },
+      {
+       "numbers": [
+        34
+       ],
+       "prompt": "Workers leaving the mine were ____"
+      },
+      {
+       "numbers": [
+        35
+       ],
+       "prompt": "1795: Conte mixed powdered graphite with ____"
+      },
+      {
+       "numbers": [
+        36
+       ],
+       "prompt": "The rods were fired in a ____"
+      },
+      {
+       "numbers": [
+        37
+       ],
+       "prompt": "More clay gives a harder pencil and a ____ line"
+      },
+      {
+       "numbers": [
+        38
+       ],
+       "prompt": "Hexagonal pencils are less likely to ____ off desks"
+      },
+      {
+       "numbers": [
+        39
+       ],
+       "prompt": "Eraser on the end of a pencil patented in ____"
+      },
+      {
+       "numbers": [
+        40
+       ],
+       "prompt": "Yellow paint suggested the graphite came from ____"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

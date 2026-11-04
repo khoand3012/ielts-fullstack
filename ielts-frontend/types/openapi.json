@@ -1,0 +1,1504 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "IELTS Backend",
+  "version": "0.1.0"
+ },
+ "paths": {
+  "/health": {
+   "get": {
+    "tags": [
+     "health"
+    ],
+    "summary": "Health Check",
+    "operationId": "health_check",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Health Check"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/register": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Register",
+    "operationId": "auth_register",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RegisterRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserRead"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/login": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Login",
+    "operationId": "auth_login",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LoginRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TokenResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/refresh": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Refresh",
+    "operationId": "auth_refresh",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RefreshRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TokenResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/logout": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Logout",
+    "operationId": "auth_logout",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RefreshRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/me": {
+   "get": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Me",
+    "operationId": "auth_me",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserRead"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/admin/users": {
+   "get": {
+    "tags": [
+     "admin"
+    ],
+    "summary": "List Users",
+    "operationId": "admin_list_users",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "maxLength": 320
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     },
+     {
+      "name": "role",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/Role"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Role"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 100,
+       "minimum": 1,
+       "default": 50,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 0,
+       "default": 0,
+       "title": "Offset"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserListResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/users/{user_id}": {
+   "patch": {
+    "tags": [
+     "admin"
+    ],
+    "summary": "Update User",
+    "operationId": "admin_update_user",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "User Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UserUpdateRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserRead"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/tests": {
+   "get": {
+    "tags": [
+     "tests"
+    ],
+    "summary": "List Tests",
+    "operationId": "list_tests",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "skill",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/Skill"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Skill"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 100,
+       "minimum": 1,
+       "default": 50,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 0,
+       "default": 0,
+       "title": "Offset"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TestListResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/tests/{test_id}": {
+   "get": {
+    "tags": [
+     "tests"
+    ],
+    "summary": "Get Test",
+    "operationId": "get_test",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "test_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Test Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TestSummary"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sessions": {
+   "post": {
+    "tags": [
+     "sessions"
+    ],
+    "summary": "Start Session",
+    "operationId": "start_session",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SessionStartRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionDetail"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "get": {
+    "tags": [
+     "sessions"
+    ],
+    "summary": "List Sessions",
+    "operationId": "list_sessions",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 100,
+       "minimum": 1,
+       "default": 50,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 0,
+       "default": 0,
+       "title": "Offset"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionListResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sessions/{session_id}": {
+   "get": {
+    "tags": [
+     "sessions"
+    ],
+    "summary": "Get Session",
+    "operationId": "get_session",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Session Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionDetail"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "patch": {
+    "tags": [
+     "sessions"
+    ],
+    "summary": "Update Session",
+    "operationId": "update_session",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Session Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SessionUpdateRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionRead"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sessions/{session_id}/answers": {
+   "put": {
+    "tags": [
+     "sessions"
+    ],
+    "summary": "Save Answers",
+    "operationId": "save_answers",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Session Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AnswersRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AnswersResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sessions/{session_id}/submit": {
+   "post": {
+    "tags": [
+     "sessions"
+    ],
+    "summary": "Submit Session",
+    "operationId": "submit_session",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Session Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionRead"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "AnswerInput": {
+    "properties": {
+     "question": {
+      "type": "integer",
+      "title": "Question"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value"
+     }
+    },
+    "type": "object",
+    "required": [
+     "question",
+     "value"
+    ],
+    "title": "AnswerInput"
+   },
+   "AnswersRequest": {
+    "properties": {
+     "answers": {
+      "items": {
+       "$ref": "#/components/schemas/AnswerInput"
+      },
+      "type": "array",
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Answers"
+     }
+    },
+    "type": "object",
+    "required": [
+     "answers"
+    ],
+    "title": "AnswersRequest"
+   },
+   "AnswersResponse": {
+    "properties": {
+     "answers": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Answers"
+     }
+    },
+    "type": "object",
+    "required": [
+     "answers"
+    ],
+    "title": "AnswersResponse"
+   },
+   "GradingMethod": {
+    "type": "string",
+    "enum": [
+     "auto",
+     "ai",
+     "human"
+    ],
+    "title": "GradingMethod"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "type": "array",
+      "title": "Detail"
+     }
+    },
+    "type": "object",
+    "title": "HTTPValidationError"
+   },
+   "LoginRequest": {
+    "properties": {
+     "email": {
+      "type": "string",
+      "format": "email",
+      "title": "Email"
+     },
+     "password": {
+      "type": "string",
+      "title": "Password"
+     }
+    },
+    "type": "object",
+    "required": [
+     "email",
+     "password"
+    ],
+    "title": "LoginRequest"
+   },
+   "Plan": {
+    "type": "string",
+    "enum": [
+     "free",
+     "paid"
+    ],
+    "title": "Plan"
+   },
+   "RefreshRequest": {
+    "properties": {
+     "refresh_token": {
+      "type": "string",
+      "title": "Refresh Token"
+     }
+    },
+    "type": "object",
+    "required": [
+     "refresh_token"
+    ],
+    "title": "RefreshRequest"
+   },
+   "RegisterRequest": {
+    "properties": {
+     "email": {
+      "type": "string",
+      "format": "email",
+      "title": "Email"
+     },
+     "password": {
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 8,
+      "title": "Password"
+     }
+    },
+    "type": "object",
+    "required": [
+     "email",
+     "password"
+    ],
+    "title": "RegisterRequest"
+   },
+   "Role": {
+    "type": "string",
+    "enum": [
+     "student",
+     "teacher",
+     "admin"
+    ],
+    "title": "Role"
+   },
+   "SessionDetail": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "test_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Test Id"
+     },
+     "test_version_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Test Version Id"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "skill": {
+      "$ref": "#/components/schemas/Skill"
+     },
+     "mode": {
+      "$ref": "#/components/schemas/SessionMode"
+     },
+     "status": {
+      "$ref": "#/components/schemas/SessionStatus"
+     },
+     "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Started At"
+     },
+     "deadline": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Deadline"
+     },
+     "submitted_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Submitted At"
+     },
+     "submit_reason": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SubmitReason"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "request_manual_grading": {
+      "type": "boolean",
+      "title": "Request Manual Grading"
+     },
+     "grading_method": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/GradingMethod"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "server_time": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Server Time"
+     },
+     "content": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Content"
+     },
+     "answers": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Answers"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "test_id",
+     "test_version_id",
+     "title",
+     "skill",
+     "mode",
+     "status",
+     "started_at",
+     "deadline",
+     "submitted_at",
+     "submit_reason",
+     "request_manual_grading",
+     "grading_method",
+     "server_time",
+     "content",
+     "answers"
+    ],
+    "title": "SessionDetail"
+   },
+   "SessionListResponse": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/SessionRead"
+      },
+      "type": "array",
+      "title": "Items"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     }
+    },
+    "type": "object",
+    "required": [
+     "items",
+     "total"
+    ],
+    "title": "SessionListResponse"
+   },
+   "SessionMode": {
+    "type": "string",
+    "enum": [
+     "practice",
+     "exam"
+    ],
+    "title": "SessionMode"
+   },
+   "SessionRead": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "test_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Test Id"
+     },
+     "test_version_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Test Version Id"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "skill": {
+      "$ref": "#/components/schemas/Skill"
+     },
+     "mode": {
+      "$ref": "#/components/schemas/SessionMode"
+     },
+     "status": {
+      "$ref": "#/components/schemas/SessionStatus"
+     },
+     "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Started At"
+     },
+     "deadline": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Deadline"
+     },
+     "submitted_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Submitted At"
+     },
+     "submit_reason": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SubmitReason"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "request_manual_grading": {
+      "type": "boolean",
+      "title": "Request Manual Grading"
+     },
+     "grading_method": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/GradingMethod"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "server_time": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Server Time"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "test_id",
+     "test_version_id",
+     "title",
+     "skill",
+     "mode",
+     "status",
+     "started_at",
+     "deadline",
+     "submitted_at",
+     "submit_reason",
+     "request_manual_grading",
+     "grading_method",
+     "server_time"
+    ],
+    "title": "SessionRead"
+   },
+   "SessionStartRequest": {
+    "properties": {
+     "test_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Test Id"
+     },
+     "mode": {
+      "$ref": "#/components/schemas/SessionMode"
+     }
+    },
+    "type": "object",
+    "required": [
+     "test_id",
+     "mode"
+    ],
+    "title": "SessionStartRequest"
+   },
+   "SessionStatus": {
+    "type": "string",
+    "enum": [
+     "in_progress",
+     "submitted"
+    ],
+    "title": "SessionStatus"
+   },
+   "SessionUpdateRequest": {
+    "properties": {
+     "request_manual_grading": {
+      "type": "boolean",
+      "title": "Request Manual Grading"
+     }
+    },
+    "type": "object",
+    "required": [
+     "request_manual_grading"
+    ],
+    "title": "SessionUpdateRequest"
+   },
+   "Skill": {
+    "type": "string",
+    "enum": [
+     "reading",
+     "listening",
+     "writing",
+     "speaking"
+    ],
+    "title": "Skill"
+   },
+   "SubmitReason": {
+    "type": "string",
+    "enum": [
+     "student",
+     "timeout"
+    ],
+    "title": "SubmitReason"
+   },
+   "TestListResponse": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/TestSummary"
+      },
+      "type": "array",
+      "title": "Items"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     }
+    },
+    "type": "object",
+    "required": [
+     "items",
+     "total"
+    ],
+    "title": "TestListResponse"
+   },
+   "TestSummary": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "skill": {
+      "$ref": "#/components/schemas/Skill"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "exam_time_limit_minutes": {
+      "type": "integer",
+      "title": "Exam Time Limit Minutes"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "skill",
+     "title",
+     "exam_time_limit_minutes"
+    ],
+    "title": "TestSummary"
+   },
+   "TokenResponse": {
+    "properties": {
+     "access_token": {
+      "type": "string",
+      "title": "Access Token"
+     },
+     "refresh_token": {
+      "type": "string",
+      "title": "Refresh Token"
+     },
+     "token_type": {
+      "type": "string",
+      "const": "bearer",
+      "title": "Token Type",
+      "default": "bearer"
+     }
+    },
+    "type": "object",
+    "required": [
+     "access_token",
+     "refresh_token"
+    ],
+    "title": "TokenResponse"
+   },
+   "UserListResponse": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/UserRead"
+      },
+      "type": "array",
+      "title": "Items"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     }
+    },
+    "type": "object",
+    "required": [
+     "items",
+     "total"
+    ],
+    "title": "UserListResponse"
+   },
+   "UserRead": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Id"
+     },
+     "email": {
+      "type": "string",
+      "format": "email",
+      "title": "Email"
+     },
+     "plan": {
+      "type": "string",
+      "title": "Plan"
+     },
+     "role": {
+      "type": "string",
+      "title": "Role"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "email",
+     "plan",
+     "role",
+     "created_at"
+    ],
+    "title": "UserRead"
+   },
+   "UserUpdateRequest": {
+    "properties": {
+     "role": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Role"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "plan": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Plan"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "title": "UserUpdateRequest"
+   },
+   "ValidationError": {
+    "properties": {
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "type": "array",
+      "title": "Location"
+     },
+     "msg": {
+      "type": "string",
+      "title": "Message"
+     },
+     "type": {
+      "type": "string",
+      "title": "Error Type"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "ctx": {
+      "type": "object",
+      "title": "Context"
+     }
+    },
+    "type": "object",
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError"
+   }
+  },
+  "securitySchemes": {
+   "HTTPBearer": {
+    "type": "http",
+    "scheme": "bearer"
+   }
+  }
+ },
+ "tags": [
+  {
+   "name": "auth",
+   "description": "Registration, login, token lifecycle."
+  },
+  {
+   "name": "health",
+   "description": "Liveness and readiness checks."
+  },
+  {
+   "name": "admin",
+   "description": "Admin-only: users, results, grading oversight."
+  },
+  {
+   "name": "tests",
+   "description": "Published tests students can take."
+  },
+  {
+   "name": "sessions",
+   "description": "Taking a test: start, autosave answers, submit."
+  }
+ ]
+}
