@@ -23,6 +23,8 @@ export function useSessionAnswers(session: SessionDetail, handlers: { onClosed()
   );
   const [status, setStatus] = useState<SaveStatus>("saved");
   const queueRef = useRef<SaveQueue | null>(null);
+  // What the server last acknowledged; starts as the fetched session's answers.
+  const savedRef = useRef<Record<number, AnswerValue>>(normalizeSaved(session.answers));
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
   const sessionId = session.id;
@@ -41,6 +43,7 @@ export function useSessionAnswers(session: SessionDetail, handlers: { onClosed()
       // keepalive lets the request outlive the page if the student is leaving the site.
       sendOnDispose: (batch) => void put(batch, true).catch(() => {}),
       onSaved: (saved) => {
+        savedRef.current = { ...savedRef.current, ...saved };
         const accepted: Record<number, AnswerValue> = {};
         for (const [question, value] of Object.entries(saved)) {
           if (!queue.hasPending(Number(question))) accepted[Number(question)] = value;
@@ -91,5 +94,7 @@ export function useSessionAnswers(session: SessionDetail, handlers: { onClosed()
 
   const flush = useCallback(() => queueRef.current?.flush() ?? Promise.resolve(true), []);
 
-  return { answers, setAnswer, flush, status };
+  const getSaved = useCallback(() => savedRef.current, []);
+
+  return { answers, setAnswer, flush, status, getSaved };
 }

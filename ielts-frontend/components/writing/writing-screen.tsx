@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Countdown } from "@/components/session/countdown";
 import { SaveStatus } from "@/components/session/save-status";
 import { SubmitDialog } from "@/components/session/submit-dialog";
@@ -35,12 +35,18 @@ export function WritingScreen({ session, content, offsetMs, expired, onExpire, o
   const answersRef = useRef<Record<number, AnswerValue>>({});
   const handleClosed = () => {
     // Hand over text the server never stored before the screen is replaced.
-    const lost = unsavedTexts(answersRef.current, session.answers);
+    const lost = unsavedTexts(answersRef.current, getSavedRef.current());
     if (Object.keys(lost).length > 0) onLostText?.(lost);
     onClosed();
   };
-  const { answers, setAnswer, flush, status } = useSessionAnswers(session, { onClosed: handleClosed });
-  answersRef.current = answers;
+  const getSavedRef = useRef<() => Record<number, AnswerValue>>(() => ({}));
+  const { answers, setAnswer, flush, status, getSaved } = useSessionAnswers(session, {
+    onClosed: handleClosed,
+  });
+  useLayoutEffect(() => {
+    answersRef.current = answers;
+    getSavedRef.current = getSaved;
+  });
   const submit = useSubmitSession(session.id, flush);
   const [submitOpen, setSubmitOpen] = useState(false);
 

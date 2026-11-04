@@ -149,3 +149,42 @@ test("on expiry the banner shows and pending text is flushed before the debounce
   // Sent by the expiry flush, not by the 500 ms debounce timer (fake clock).
   expect(putTimes[0] - typedAt).toBeLessThan(400);
 });
+
+test("on session_closed only text typed after the last successful save is reported lost", async () => {
+  let puts = 0;
+  server.use(
+    http.put(`${BASE}/answers`, async ({ request }) => {
+      puts += 1;
+      const body = (await request.json()) as { answers: { question: number; value: unknown }[] };
+      if (puts > 1) {
+        return HttpResponse.json(
+          { error: { code: "session_closed", message: "closed", extra: {} } },
+          { status: 409 },
+        );
+      }
+      return HttpResponse.json({
+        answers: Object.fromEntries(body.answers.map((a) => [String(a.question), a.value])),
+      });
+    }),
+  );
+  const onLostText = vi.fn();
+  const onClosed = vi.fn();
+  const user = userEvent.setup();
+  renderWithProviders(
+    <WritingScreen
+      session={session()}
+      content={content}
+      offsetMs={0}
+      expired={false}
+      onExpire={() => {}}
+      onClosed={onClosed}
+      onLostText={onLostText}
+    />,
+  );
+  await user.type(screen.getByRole("textbox", { name: "Your answer for Task 1" }), "saved essay");
+  await waitFor(() => expect(puts).toBe(1));
+  await user.type(screen.getByRole("textbox", { name: "Your answer for Task 2" }), "late words");
+  await waitFor(() => expect(onClosed).toHaveBeenCalled());
+  expect(onLostText).toHaveBeenCalledTimes(1);
+  expect(onLostText).toHaveBeenCalledWith({ 2: "late words" });
+});

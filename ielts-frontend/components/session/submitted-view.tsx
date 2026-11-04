@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { SessionRead } from "@/lib/api/types";
 
@@ -16,6 +16,21 @@ type Props = {
 export function SubmittedView({ session, unsavedText }: Props) {
   const router = useRouter();
   const resultHref = `/sessions/${session.id}/result`;
+  const [copyFailed, setCopyFailed] = useState<Record<string, boolean>>({});
+  const boxes = useRef<Record<string, HTMLTextAreaElement | null>>({});
+
+  async function copy(task: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFailed((prev) => ({ ...prev, [task]: false }));
+    } catch {
+      // Insecure context or denied permission: select the text so Ctrl+C works.
+      boxes.current[task]?.focus();
+      boxes.current[task]?.select();
+      setCopyFailed((prev) => ({ ...prev, [task]: true }));
+    }
+  }
+
   const lost = Object.entries(unsavedText ?? {}).filter(([, text]) => text.trim() !== "");
   const hasLost = lost.length > 0;
   useEffect(() => {
@@ -53,6 +68,9 @@ export function SubmittedView({ session, unsavedText }: Props) {
               <textarea
                 id={`lost-task-${task}`}
                 readOnly
+                ref={(el) => {
+                  boxes.current[task] = el;
+                }}
                 value={text}
                 rows={12}
                 className="w-full rounded-lg border bg-background p-3 text-sm"
@@ -61,10 +79,15 @@ export function SubmittedView({ session, unsavedText }: Props) {
                 type="button"
                 variant="outline"
                 className="justify-self-start"
-                onClick={() => void navigator.clipboard.writeText(text)}
+                onClick={() => void copy(task, text)}
               >
                 {`Copy Task ${task} text`}
               </Button>
+              {copyFailed[task] && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  Press Ctrl+C to copy
+                </p>
+              )}
             </div>
           ))}
         </section>

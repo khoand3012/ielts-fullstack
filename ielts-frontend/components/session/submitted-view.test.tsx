@@ -40,3 +40,17 @@ test("unsaved text stays on screen, copyable, and does not redirect", async () =
   expect(screen.getByRole("link", { name: "View result" })).toHaveAttribute("href", "/sessions/s-9/result");
   expect(router.replace).not.toHaveBeenCalled();
 });
+
+test("when the clipboard is unavailable it selects the text and shows a hint", async () => {
+  const user = userEvent.setup();
+  vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("denied"));
+  render(
+    <SubmittedView
+      session={makeSession({ status: "submitted", id: "s-9" })}
+      unsavedText={{ 1: "essay one" }}
+    />,
+  );
+  await user.click(screen.getByRole("button", { name: "Copy Task 1 text" }));
+  expect(await screen.findByText("Press Ctrl+C to copy")).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Task 1 text" })).toHaveFocus();
+});
