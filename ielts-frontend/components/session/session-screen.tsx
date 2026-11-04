@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ContentError, parseContent, type ParsedContent } from "@/lib/content/schema";
 import { useSessionQuery } from "@/lib/session/queries";
 import { PLAYABLE_SKILLS } from "@/lib/tests/skills";
 import { ReadingScreen } from "./reading-screen";
 import { SubmittedView } from "./submitted-view";
+import { WritingScreen } from "@/components/writing/writing-screen";
 
 function Message({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
@@ -23,6 +24,13 @@ function Message({ title, children }: { title: string; children?: React.ReactNod
 
 export function SessionScreen({ sessionId }: { sessionId: string }) {
   const [expired, setExpired] = useState(false);
+  const [unsavedText, setUnsavedText] = useState<Record<number, string> | null>(null);
+  // Written synchronously so SubmittedView's first effect already sees it.
+  const unsavedRef = useRef<Record<number, string> | null>(null);
+  const handleLostText = (text: Record<number, string>) => {
+    unsavedRef.current = text;
+    setUnsavedText(text);
+  };
   const query = useSessionQuery(sessionId, { poll: expired });
   const session = query.data?.session;
 
@@ -63,11 +71,28 @@ export function SessionScreen({ sessionId }: { sessionId: string }) {
 
   const { offsetMs } = query.data;
   const current = query.data.session;
-  if (current.status === "submitted") return <SubmittedView session={current} />;
+  if (current.status === "submitted") return <SubmittedView session={current} unsavedText={unsavedText ?? undefined} unsavedRef={unsavedRef} />;
 
-  if (parsed?.skill !== "reading") {
+  if (parsed?.skill !== "reading" && parsed?.skill !== "writing") {
+    if (PLAYABLE_SKILLS.has(current.skill)) {
+      return (
+        <Message title="This test couldn't be loaded">
+          <p className="mt-2 text-sm text-muted-foreground">
+            The test content is invalid. Please try again later.
+          </p>
+        </Message>
+      );
+    }
     return <Message title="This test type isn't available yet" />;
   }
+
+  const screenProps = {
+    session: current,
+    offsetMs,
+    expired,
+    onExpire: () => setExpired(true),
+    onClosed: () => void query.refetch(),
+  };
 
   return (
     <>
@@ -79,14 +104,11 @@ export function SessionScreen({ sessionId }: { sessionId: string }) {
           </button>
         </div>
       )}
-      <ReadingScreen
-        session={current}
-        content={parsed.content}
-        offsetMs={offsetMs}
-        expired={expired}
-        onExpire={() => setExpired(true)}
-        onClosed={() => void query.refetch()}
-      />
+      {parsed.skill === "reading" ? (
+        <ReadingScreen {...screenProps} content={parsed.content} />
+      ) : (
+        <WritingScreen {...screenProps} content={parsed.content} onLostText={handleLostText} />
+      )}
     </>
   );
 }

@@ -14,8 +14,11 @@ This folder is the Next.js app. The REST API lives in the sibling folder `../iel
 | Test list with skill filter, practice or exam mode | ✅ |
 | Reading session: passages, all question types, autosave, resume, countdown, submit | ✅ |
 | My sessions (`/sessions`) | ✅ |
-| Listening, Writing, Speaking sessions | Not built yet |
-| Results page and progress dashboard | Not built yet |
+| Writing session: both tasks on one page, word counts, autosave, resume, countdown (exam mode), submit | ✅ |
+| Results page, including Writing AI feedback (band, per-task bands, criterion comments) | ✅ |
+| Listening and Speaking sessions | Not built yet |
+| Progress dashboard | Not built yet |
+| Writing teacher grading on request, inline feedback highlights | Not built yet |
 
 ## Getting started
 

@@ -30,9 +30,10 @@ The backend lives at `../ielts-backend` (Python + FastAPI, one in-process app �
 
 1. **Take a test** — start from `/tests` (practice or exam mode), then `/sessions/[sessionId]` — autosaved answers, server-enforced time limits; submissions go to `POST /sessions/{id}/submit`. Re-opening the URL resumes the session
 2. **My sessions** — `/sessions` — the student's attempts, newest first
-3. **Speaking section** (not built yet) — record per question via `MediaRecorder`, upload via backend-issued pre-signed URLs
-4. **Results page** (not built yet) — Reading/Listening grades show immediately; Writing/Speaking show "Processing" state and poll until ready
-5. **Progress dashboard** (not built yet) — `/dashboard` — band score trends per skill, weak areas
+3. **Writing session** — startable from `/tests` (same practice/exam dialog), played at `/sessions/[sessionId]`: Task 1 (with chart image) and Task 2 stacked on one page, a typing box each, live word count against the task minimum (advisory only), 20,000-character cap, no spell-check. Answers autosave and resume like Reading; exam mode shows the countdown. Submit confirms and names any empty task. If the exam clock runs out, unsaved text is flushed at 0:00; if the server still rejects the save because the session is closed, the submitted view stays with the unsaved text in read-only boxes and "Copy Task N text" buttons. Not built: teacher grading on request (backend has no teacher queue yet), inline highlights with explanations (phase 2, needs backend changes)
+4. **Speaking section** (not built yet) — record per question via `MediaRecorder`, upload via backend-issued pre-signed URLs
+5. **Results page** — shows "being graded" while Writing is pending, then the AI feedback (overall band, focus list, per-task bands, criterion comments with quotes/suggestions). Listening and Speaking results are not built yet
+6. **Progress dashboard** (not built yet) — `/dashboard` — band score trends per skill, weak areas
 
 ## What's NOT in scope here
 

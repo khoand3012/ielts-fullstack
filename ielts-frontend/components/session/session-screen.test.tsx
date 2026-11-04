@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { SessionDetail } from "@/lib/api/types";
 import writing from "@/tests/fixtures/content/writing.json";
 import { makeSession } from "@/tests/fixtures/session";
@@ -13,6 +13,7 @@ import { SessionScreen } from "./session-screen";
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 beforeEach(resetRouter);
+afterEach(() => vi.useRealTimers());
 
 const BASE = "*/api/backend/sessions/s-1";
 const closed = () =>
@@ -192,8 +193,73 @@ test("a submitted session opens straight to the submitted view", async () => {
   expect(router.replace).toHaveBeenCalledWith("/sessions/s-1/result");
 });
 
-test("a writing session shows that the test type isn't available yet", async () => {
+test("a writing session opens the writing screen", async () => {
   backend([makeSession({ skill: "writing", content: structuredClone(writing) })]);
+  renderWithProviders(<SessionScreen sessionId="s-1" />);
+  expect((await screen.findAllByRole("textbox")).length).toBeGreaterThanOrEqual(2);
+  expect(screen.queryByText("This test type isn't available yet")).not.toBeInTheDocument();
+});
+
+test("writing typed but unsaved when the server closes the session stays visible", async () => {
+  backend(
+    [
+      makeSession({ skill: "writing", content: structuredClone(writing), mode: "exam", deadline: new Date(Date.now() + 60_000).toISOString() }),
+      submitted({ skill: "writing", submit_reason: "timeout" }),
+    ],
+    { put: closed },
+  );
+  const user = userEvent.setup();
+  renderWithProviders(<SessionScreen sessionId="s-1" />);
+  const boxes = await screen.findAllByRole("textbox");
+  await user.type(boxes[0], "my precious essay");
+  expect(await screen.findByRole("heading", { name: "Time's up — submitted" })).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent(/last typing was not saved/i);
+  expect(screen.getByDisplayValue("my precious essay")).toHaveAttribute("readonly");
+  expect(screen.getByRole("link", { name: "View result" })).toBeInTheDocument();
+  expect(router.replace).not.toHaveBeenCalled();
+});
+
+test("text still unsaved when a refetch finds the session submitted stays visible", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const serverNow = Date.now();
+  backend(
+    [
+      makeSession({
+        skill: "writing",
+        content: structuredClone(writing),
+        mode: "exam",
+        server_time: new Date(serverNow).toISOString(),
+        deadline: new Date(serverNow + 2_000).toISOString(),
+      }),
+      submitted({ skill: "writing", submit_reason: "timeout" }),
+    ],
+    { put: () => new Promise<Response>(() => {}) as unknown as Response },
+  );
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  renderWithProviders(<SessionScreen sessionId="s-1" />);
+  const boxes = await screen.findAllByRole("textbox");
+  await user.type(boxes[0], "never acknowledged");
+  await act(async () => {
+    vi.advanceTimersByTime(3_000); // deadline passes: polling starts
+  });
+  await act(async () => {
+    vi.advanceTimersByTime(10_000); // the poll finds the session submitted
+  });
+  expect(await screen.findByRole("heading", { name: "Time's up — submitted" })).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent(/last typing was not saved/i);
+  expect(screen.getByDisplayValue("never acknowledged")).toHaveAttribute("readonly");
+  expect(router.replace).not.toHaveBeenCalled();
+});
+
+test("a writing session with invalid content says it couldn't be loaded", async () => {
+  backend([makeSession({ skill: "writing", content: {} })]);
+  renderWithProviders(<SessionScreen sessionId="s-1" />);
+  expect(await screen.findByText("This test couldn't be loaded")).toBeInTheDocument();
+  expect(screen.queryByText("This test type isn't available yet")).not.toBeInTheDocument();
+});
+
+test("a speaking session shows that the test type isn't available yet", async () => {
+  backend([makeSession({ skill: "speaking", content: {} })]);
   renderWithProviders(<SessionScreen sessionId="s-1" />);
   expect(await screen.findByText("This test type isn't available yet")).toBeInTheDocument();
 });
