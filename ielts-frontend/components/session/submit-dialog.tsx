@@ -20,9 +20,10 @@ type Props = {
   onConfirm(): void;
   pending: boolean;
   error: Error | null;
+  notice?: string;
 };
 
-export function SubmitDialog({ open, onOpenChange, unanswered, total, onConfirm, pending, error }: Props) {
+export function SubmitDialog({ open, onOpenChange, unanswered, total, onConfirm, pending, error, notice }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -35,6 +36,7 @@ export function SubmitDialog({ open, onOpenChange, unanswered, total, onConfirm,
             {unanswered} of {total} questions unanswered.
           </p>
         )}
+        {notice && <p className="text-sm font-medium">{notice}</p>}
         {error && (
           <Alert variant="destructive">
             <AlertDescription>
