@@ -39,6 +39,17 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-skill-reading: var(--skill-reading);
+  --color-skill-listening: var(--skill-listening);
+  --color-skill-writing: var(--skill-writing);
+  --color-skill-speaking: var(--skill-speaking);
+  --color-crit-task: var(--crit-task);
+  --color-crit-cc: var(--crit-cc);
+  --color-crit-lr: var(--crit-lr);
+  --color-crit-gra: var(--crit-gra);
+  --color-state-correct: var(--state-correct);
+  --color-state-partial: var(--state-partial);
+  --color-state-wrong: var(--state-wrong);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -81,6 +92,18 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* Results: skill accents, Writing criterion tones, answer states */
+  --skill-reading: oklch(0.58 0.17 250);
+  --skill-listening: oklch(0.56 0.20 295);
+  --skill-writing: oklch(0.60 0.22 330);
+  --skill-speaking: oklch(0.68 0.17 55);
+  --crit-task: oklch(0.58 0.12 185);
+  --crit-cc: oklch(0.55 0.17 250);
+  --crit-lr: oklch(0.55 0.20 295);
+  --crit-gra: oklch(0.58 0.20 25);
+  --state-correct: oklch(0.60 0.15 150);
+  --state-partial: oklch(0.75 0.15 80);
+  --state-wrong: oklch(0.58 0.20 25);
 }
 
 .dark {
@@ -115,6 +138,18 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /* Results tokens: same hues, lighter for dark surfaces */
+  --skill-reading: oklch(0.72 0.17 250);
+  --skill-listening: oklch(0.72 0.20 295);
+  --skill-writing: oklch(0.72 0.22 330);
+  --skill-speaking: oklch(0.74 0.17 55);
+  --crit-task: oklch(0.72 0.12 185);
+  --crit-cc: oklch(0.72 0.17 250);
+  --crit-lr: oklch(0.72 0.20 295);
+  --crit-gra: oklch(0.72 0.20 25);
+  --state-correct: oklch(0.72 0.15 150);
+  --state-partial: oklch(0.80 0.15 80);
+  --state-wrong: oklch(0.72 0.20 25);
 }
 
 @layer base {

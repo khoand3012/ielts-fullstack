@@ -1,5 +1,14 @@
 import { expect, test } from "vitest";
-import { answerList, formatBand, formatDuration, questionLabel, verdict } from "./format";
+import {
+  answerList,
+  CRITERION_SHORT,
+  CRITERION_TONE,
+  formatBand,
+  formatDuration,
+  questionLabel,
+  TONE_CLASSES,
+  verdict,
+} from "./format";
 
 test("questionLabel handles single, consecutive and non-consecutive numbers", () => {
   expect(questionLabel([5], 5)).toBe("Q5");
@@ -25,4 +34,13 @@ test("formatBand, verdict and answerList", () => {
   expect(answerList(null)).toEqual([]);
   expect(answerList(["A", " "])).toEqual(["A"]);
   expect(answerList("x")).toEqual(["x"]);
+});
+
+test("criterion tones group TA and TR; tone classes are literal per tone", () => {
+  expect(CRITERION_TONE.task_achievement).toBe("task");
+  expect(CRITERION_TONE.task_response).toBe("task");
+  expect(CRITERION_TONE.grammatical_range_accuracy).toBe("gra");
+  expect(Object.values(CRITERION_SHORT)).toEqual(["TA", "TR", "CC", "LR", "GRA"]);
+  expect(TONE_CLASSES.gra.dot).toBe("bg-crit-gra");
+  expect(TONE_CLASSES.lr.mark).toContain("underline");
 });

@@ -1,5 +1,6 @@
 import type { SessionDetail } from "@/lib/api/types";
 import reading from "./content/reading.json";
+import writing from "./content/writing.json";
 
 /** A Reading session in practice mode with nothing answered, as GET /sessions/{id} returns it. */
 export function makeSession(overrides: Partial<SessionDetail> = {}): SessionDetail {
@@ -26,4 +27,15 @@ export function makeSession(overrides: Partial<SessionDetail> = {}): SessionDeta
     answers: {},
     ...overrides,
   };
+}
+
+/** A Writing session whose content has tasks with min_words 150 and 250. */
+export function makeWritingSession(overrides: Partial<SessionDetail> = {}): SessionDetail {
+  return makeSession({
+    title: "Practice Test 1 — Academic Writing",
+    skill: "writing",
+    status: "submitted",
+    content: structuredClone(writing),
+    ...overrides,
+  });
 }

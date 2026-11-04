@@ -32,9 +32,15 @@ from core.models import (
     TestVersion,
     User,
 )
-from core.schemas.session import AnswerInput, WritingResult
+from core.schemas.session import (
+    AnswerInput,
+    ResultSection,
+    WritingResult,
+    WritingResultView,
+    WritingTaskView,
+)
 from core.services import ai_grading, auto_grading, catalog, storage
-from core.services.content import ItemSpec, item_index
+from core.services.content import ItemSpec, item_index, section_titles
 from core.services.entitlements import check_and_consume
 from core.settings import get_settings
 
@@ -123,9 +129,18 @@ def time_spent_seconds(ts: TestSession) -> int:
     return int((end - ts.started_at).total_seconds())
 
 
+@dataclass(frozen=True)
+class ResultData:
+    session: TestSession
+    score: auto_grading.Score | None
+    writing: WritingResultView | None
+    # set only together with `score`
+    sections: list[ResultSection] | None
+
+
 async def get_result(
     db: AsyncSession, user: User, session_id: uuid.UUID, now: datetime | None = None
-) -> tuple[TestSession, auto_grading.Score | None, WritingResult | None]:
+) -> ResultData:
     """The caller's submitted session, with its per-question marks when it has been scored
     (None if not scored, or if recomputing them fails), or its AI feedback once that is
     `ready`. The stored score is the total; the marks are recomputed with the current rules."""
@@ -133,16 +148,19 @@ async def get_result(
     if ts.status == SessionStatus.IN_PROGRESS:
         raise ConflictError("session is not submitted yet")
     if ts.grading_method == GradingMethod.AI:
-        return ts, None, await _writing_result(db, ts)
+        stored = await _writing_result(db, ts)
+        view = _with_essays(stored, await get_answers(db, ts)) if stored is not None else None
+        return ResultData(ts, None, view, None)
     if ts.grading_method != GradingMethod.AUTO or ts.raw_score is None:
-        return ts, None, None
+        return ResultData(ts, None, None, None)
     version, answers = await get_version(db, ts), await get_answers(db, ts)
     try:
         score = mark_session(ts, version, answers)
+        content = catalog.load_content(Skill(ts.skill), version)
     except Exception:
         # The stored score is still valid; show it without the per-question marks.
         log.exception("auto_grading_failed", session_id=str(ts.id))
-        return ts, None, None
+        return ResultData(ts, None, None, None)
     if score.raw_score != ts.raw_score:
         # The rules changed since this session was scored: `regrade-auto --all` is due.
         log.warning(
@@ -151,7 +169,19 @@ async def get_result(
             stored=ts.raw_score,
             recomputed=score.raw_score,
         )
-    return ts, score, None
+    sections = [ResultSection(number=n, title=t) for n, t in section_titles(content)]
+    return ResultData(ts, score, None, sections)
+
+
+def _with_essays(result: WritingResult, answers: dict[int, Any]) -> WritingResultView:
+    """The feedback plus each task's saved essay (empty when blank)."""
+    tasks = []
+    for task in result.tasks:
+        essay = answers.get(task.number)
+        tasks.append(
+            WritingTaskView(**task.model_dump(), text=essay if isinstance(essay, str) else "")
+        )
+    return WritingResultView(tasks=tasks, focus=result.focus)
 
 
 async def _writing_result(db: AsyncSession, ts: TestSession) -> WritingResult | None:

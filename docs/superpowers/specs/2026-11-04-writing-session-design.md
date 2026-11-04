@@ -118,6 +118,8 @@ hover/tap explanation. This needs backend changes and prompt work, so it is deli
 
 ## Phase 2 sketch (for later; not part of the phase 1 plan)
 
+Superseded by `2026-11-04-results-page-redesign-design.md` (criterion colours, quote matching).
+
 To highlight text, the result must tell the frontend where each comment applies and what kind it is.
 Today it does not: the result has no essay text, comments carry a free-text `quote` but no position, and
 nothing says "mistake" versus "improvement". A phase 2 design will need to decide:

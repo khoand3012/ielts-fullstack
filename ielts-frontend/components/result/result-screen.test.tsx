@@ -1,10 +1,11 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { SessionResult } from "@/lib/api/types";
+import type { Criterion, SessionResult } from "@/lib/api/types";
 import { POLL_CAP_MS, pollDelay } from "@/lib/result/queries";
-import { makeResult } from "@/tests/fixtures/result";
+import { makeResult, makeWritingResult } from "@/tests/fixtures/result";
+import { makeWritingSession } from "@/tests/fixtures/session";
 import { server } from "@/tests/msw/server";
 import { renderWithProviders } from "@/tests/render";
 import { resetRouter, router } from "@/tests/router";
@@ -16,51 +17,120 @@ beforeEach(resetRouter);
 afterEach(() => vi.useRealTimers());
 
 const URL = "*/api/backend/sessions/s-1/result";
+const SESSION_URL = "*/api/backend/sessions/s-1";
 const serve = (...results: SessionResult[]) => {
   let n = 0;
   server.use(
+    // Writing results also read the session for task minimums; absent by default.
+    http.get(SESSION_URL, () => HttpResponse.json({ error: { code: "not_found", message: "", extra: {} } }, { status: 404 })),
     http.get(URL, () => HttpResponse.json(results[Math.min(n++, results.length - 1)])),
   );
 };
 const apiError = (status: number, code: string) =>
   HttpResponse.json({ error: { code, message: code, extra: {} } }, { status });
 
-test("graded Reading shows the score header and every question", async () => {
-  serve(
-    makeResult({
-      questions: [
-        ...makeResult().questions!,
-        {
-          number: 20,
-          numbers: [20, 21],
-          kind: "choice",
-          answer: ["A", "C"],
-          accepted: ["A", "B"],
-          correct_choices: ["A"],
-          marks: 1,
-          max_marks: 2,
-        },
-      ],
-    }),
-  );
+const q20 = {
+  number: 20,
+  numbers: [20, 21],
+  kind: "choice",
+  answer: ["A", "C"],
+  accepted: ["A", "B"],
+  correct_choices: ["A"],
+  marks: 1,
+  max_marks: 2,
+  section: 2,
+  question_type: "multiple_choice",
+} satisfies NonNullable<SessionResult["questions"]>[number];
+
+const withQ20 = () => makeResult({ questions: [...makeResult().questions!, q20] });
+
+test("graded Reading shows the hero and a chip per item", async () => {
+  serve(withQ20());
   renderWithProviders(<ResultScreen sessionId="s-1" />);
   expect(await screen.findByRole("heading", { name: "Practice Test 1 — Academic Reading" })).toBeInTheDocument();
-  expect(screen.getByText("5.5")).toBeInTheDocument();
+  expect(screen.getByText("5.5", { selector: "dd" })).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: "Band 5.5" })).toBeInTheDocument();
   expect(screen.getByText("1/2", { selector: "dd" })).toBeInTheDocument();
   expect(screen.getByText("30 min 0 s")).toBeInTheDocument();
 
-  const rows = screen.getAllByRole("row");
-  const q1 = within(rows.find((r) => within(r).queryByText("Q1"))!);
-  expect(q1.getByText("Correct")).toBeInTheDocument();
-  const q8 = within(rows.find((r) => within(r).queryByText("Q8"))!);
-  expect(q8.getByText("moss")).toBeInTheDocument();
-  expect(q8.getByText("Incorrect")).toBeInTheDocument();
-  expect(q8.getByText("lichen / lichens")).toBeInTheDocument();
-  const q20 = within(rows.find((r) => within(r).queryByText("Q20–21"))!);
-  expect(q20.getByText("Partly correct")).toBeInTheDocument();
-  expect(q20.getByText("(right)")).toBeInTheDocument();
-  expect(q20.getByText("(wrong)")).toBeInTheDocument();
-  expect(q20.getByText("A, B")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Q1: Correct" })).toHaveTextContent(/^Q1$/);
+  // Colour is not the only signal: every chip carries a decorative state glyph.
+  for (const chip of screen.getAllByRole("button", { name: /^Q\d/ })) {
+    expect(chip.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  }
+  expect(screen.getByRole("button", { name: "Q8: Incorrect" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Q20–21: Partly correct" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Passage 1" })).toBeInTheDocument();
+  expect(screen.getByText("The history of glass")).toBeInTheDocument();
+});
+
+test("selecting a chip shows the answers; next mistake skips correct items", async () => {
+  serve(withQ20());
+  const user = userEvent.setup();
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  await user.click(await screen.findByRole("button", { name: "Q1: Correct" }));
+  const card = within(screen.getByRole("region", { name: "Question detail" }));
+  expect(card.getAllByText("TRUE")).toHaveLength(2);
+  expect(card.getByText("True / False / Not given")).toBeInTheDocument();
+
+  await user.click(card.getByRole("button", { name: "Next mistake" }));
+  expect(card.getByText("moss")).toBeInTheDocument();
+  expect(card.getByText("lichen / lichens")).toBeInTheDocument();
+
+  await user.click(card.getByRole("button", { name: "Next mistake" }));
+  expect(card.getByText("(right)")).toBeInTheDocument();
+  expect(card.getByText("(wrong)")).toBeInTheDocument();
+  expect(card.getByText("A, B")).toBeInTheDocument();
+
+  await user.click(card.getByRole("button", { name: "Previous mistake" }));
+  expect(card.getByText("moss")).toBeInTheDocument();
+});
+
+test("mistakes only hides correct chips", async () => {
+  serve(withQ20());
+  const user = userEvent.setup();
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  await screen.findByRole("button", { name: "Q1: Correct" });
+  await user.click(screen.getByRole("button", { name: "Mistakes only" }));
+  expect(screen.queryByRole("button", { name: "Q1: Correct" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Q8: Incorrect" })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "All" }));
+  expect(screen.getByRole("button", { name: "Q1: Correct" })).toBeInTheDocument();
+});
+
+test("type filter keeps only that type", async () => {
+  serve(withQ20());
+  const user = userEvent.setup();
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  await screen.findByRole("button", { name: "Q1: Correct" });
+  await user.selectOptions(screen.getByLabelText("Question type"), "Gap fill");
+  const chips = screen.getAllByRole("button", { name: /^Q\d/ });
+  expect(chips.map((c) => c.getAttribute("aria-label"))).toEqual(["Q8: Incorrect"]);
+});
+
+test("fix these next lists weakest types", async () => {
+  serve(makeResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await screen.findByRole("heading", { name: "Fix these next" })).toBeInTheDocument();
+  expect(screen.getByText("Gap fill: 0 of 1 right")).toBeInTheDocument();
+});
+
+test("Listening groups by part", async () => {
+  serve(
+    makeResult({ skill: "listening", module: null, sections: [{ number: 1, title: "Booking a room" }] }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await screen.findByRole("heading", { name: "Part 1" })).toBeInTheDocument();
+  expect(screen.getByText("Booking a room")).toBeInTheDocument();
+});
+
+test("empty questions renders no grid", async () => {
+  serve(makeResult({ questions: [] }));
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await screen.findByRole("img", { name: "Band 5.5" })).toBeInTheDocument();
+  expect(screen.queryByText("Accuracy by question type")).not.toBeInTheDocument();
+  expect(screen.queryByText("Fix these next")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^Q\d/ })).not.toBeInTheDocument();
 });
 
 test("null questions and null band still show the score with a note", async () => {
@@ -70,7 +140,7 @@ test("null questions and null band still show the score with a note", async () =
   expect(screen.getByText("Raw score")).toBeInTheDocument();
   expect(screen.getByText("12")).toBeInTheDocument();
   expect(screen.getByText(/No band is given/)).toBeInTheDocument();
-  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^Q\d/ })).not.toBeInTheDocument();
 });
 
 test("polls while being graded, then shows the result and stops", async () => {
@@ -91,7 +161,7 @@ test("polls while being graded, then shows the result and stops", async () => {
   expect(screen.getByRole("status")).toHaveTextContent("Your result is being graded.");
 
   await vi.advanceTimersByTimeAsync(pollDelay(0) + 100);
-  expect(await screen.findByRole("table")).toBeInTheDocument();
+  expect(await screen.findByRole("img", { name: "Band 5.5" })).toBeInTheDocument();
   expect(screen.queryByText("Your result is being graded")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Your result is ready.");
 
@@ -119,55 +189,393 @@ test("a 404 shows not found without retrying", async () => {
   expect(calls).toBe(1);
 });
 
-test("graded Writing shows bands, comments, a blank task and the focus list", async () => {
+const essayTab = (name: RegExp) => screen.findByRole("tab", { name });
+
+test("graded Writing shows the essay with highlights", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const tab = await essayTab(/^Task 1 · 6\.0/);
+  expect(tab).toHaveAttribute("aria-selected", "true");
+  expect(tab).toHaveTextContent("172 words");
+  // The highlights add no visible text: each paragraph reads exactly as written.
+  expect(screen.getByText(/between 2000 and 2020/).textContent).toBe(
+    "Overall, the graph go up between 2000 and 2020.",
+  );
+  expect(screen.getByText(/again in 2010/).textContent).toBe("The graph go up again in 2010.");
+  expect(screen.getByRole("button", { name: "Task Achievement: the graph go up" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  ).toBeInTheDocument();
+  const fixNext = screen.getByRole("region", { name: "Fix these next" });
+  expect(within(fixNext).getByText("Vary your sentence openings")).toBeInTheDocument();
+  // Two focus items: the hero shows both, so the Writing view adds no "More to focus on".
+  expect(screen.queryByRole("region", { name: "More to focus on" })).toBeNull();
+});
+
+const withTask1Words = (word_count: number) => {
+  const base = makeWritingResult();
+  return makeWritingResult({
+    writing: {
+      ...base.writing!,
+      tasks: [{ ...base.writing!.tasks[0], word_count }, base.writing!.tasks[1]],
+    },
+  });
+};
+
+test("under-length task shows a warning chip", async () => {
+  serve(withTask1Words(120));
+  server.use(http.get(SESSION_URL, () => HttpResponse.json(makeWritingSession())));
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const chip = await screen.findByText("Under 150 words");
+  expect(screen.queryByText("Under 250 words")).toBeNull();
+  // The chip is announced as its own phrase, after the word count.
+  expect(screen.getByRole("tab", { name: /^Task 1 · 6\.0 120 words Under 150 words$/ })).toBeInTheDocument();
+  // Theme tokens, not hard-coded palette colours; foreground text keeps 4.5:1 on the tint.
+  expect(chip).toHaveClass("bg-state-partial/15", "text-foreground");
+  expect(chip.className).not.toMatch(/amber/);
+});
+
+test("no chip when session content fails to load", async () => {
+  serve(withTask1Words(120));
+  server.use(http.get(SESSION_URL, () => apiError(500, "internal")));
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await essayTab(/^Task 1 · 6\.0/)).toBeInTheDocument();
+  expect(screen.queryByText(/Under \d+ words/)).toBeNull();
+});
+
+test("tapping a highlight opens the coach panel", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Task Achievement: the graph go up" }));
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  expect(screen.getByText("Better")).toBeInTheDocument();
+  expect(screen.getByText("Overall, the graph rises between 2000 and 2020.")).toBeInTheDocument();
+  const panel = screen.getByRole("complementary", { name: "Highlight 1 of 2" });
+  expect(within(panel).getByText("the graph go up", { selector: "mark" })).toBeInTheDocument();
+  expect(screen.getByText("Covers the key trends.")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Highlight 1 of 2" })).toHaveFocus();
+
+  await user.click(screen.getByRole("button", { name: "Next" }));
+  expect(screen.getByText("Use the past tense for past years.")).toBeInTheDocument();
+  expect(screen.getByText("The graph went up again in 2010.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.getByText("Tap a highlight to see the fix")).toBeInTheDocument();
+  // Next doesn't change the opener: focus goes back to the highlight that opened the panel.
+  expect(screen.getByRole("button", { name: "Task Achievement: the graph go up" })).toHaveFocus();
+});
+
+test("Previous walks back through the highlights", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  );
+  expect(screen.getByRole("heading", { name: "Highlight 2 of 2" })).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "Previous" }));
+  expect(screen.getByText("Covers the key trends.")).toBeInTheDocument();
+  expect(screen.queryByText("Use the past tense for past years.")).toBeNull();
+  // Previous is now disabled, so focus moves to the heading rather than being lost.
+  expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+  expect(screen.getByRole("heading", { name: "Highlight 1 of 2" })).toHaveFocus();
+});
+
+test("a highlight opens with Enter and with Space", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  const ta = await screen.findByRole("button", { name: "Task Achievement: the graph go up" });
+  expect(ta).toHaveAttribute("tabindex", "0");
+  ta.focus();
+  await user.keyboard("{Enter}");
+  expect(screen.getByText("Covers the key trends.")).toBeInTheDocument();
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  await user.keyboard("{Escape}");
+  expect(ta).toHaveFocus();
+  await user.keyboard(" ");
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+});
+
+test("a placed comment without a suggestion shows no Better", async () => {
+  const base = makeWritingResult();
+  const [task1, task2] = base.writing!.tasks;
   serve(
-    makeResult({
-      skill: "writing",
-      module: null,
-      raw_score: null,
-      max_score: null,
-      answered: null,
-      questions: null,
-      band: 6.5,
-      grading_method: "ai",
+    makeWritingResult({
       writing: {
-        focus: ["Vary your sentence openings", "Check article use"],
+        ...base.writing!,
         tasks: [
           {
-            number: 1,
-            band: 6,
-            word_count: 172,
-            criteria: [
-              {
-                criterion: "task_achievement",
-                band: 6,
-                comments: [
-                  { comment: "Covers the key trends.", quote: "the graph go up", suggestion: "the graph rises" },
-                  { comment: "No overview given.", quote: null, suggestion: null },
-                ],
-              },
-              { criterion: "lexical_resource", band: 6.5, comments: [] },
-            ],
+            ...task1,
+            criteria: task1.criteria.map((c) =>
+              c.criterion === "grammatical_range_accuracy"
+                ? { ...c, comments: [{ ...c.comments[0], suggestion: "   " }] }
+                : c,
+            ),
           },
-          { number: 2, band: null, word_count: 0, criteria: [] },
+          task2,
         ],
       },
     }),
   );
   renderWithProviders(<ResultScreen sessionId="s-1" />);
-  expect(await screen.findByRole("heading", { name: "Task 1" })).toBeInTheDocument();
-  expect(screen.getByText("6.5", { selector: "dd" })).toBeInTheDocument();
-  expect(screen.getByText(/172 words/)).toBeInTheDocument();
-  expect(screen.getByText("Task Achievement")).toBeInTheDocument();
-  expect(screen.getByText("the graph go up").tagName).toBe("BLOCKQUOTE");
-  expect(screen.getByText("the graph rises")).toBeInTheDocument();
-  expect(screen.getByText("No comments for this criterion.")).toBeInTheDocument();
-  expect(screen.getByText("Vary your sentence openings")).toBeInTheDocument();
-  expect(screen.getByText(/0 words/)).toHaveTextContent("Not scored");
-  expect(screen.getByText(/left blank/)).toBeInTheDocument();
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  );
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  expect(screen.getByText("Use the past tense for past years.")).toBeInTheDocument();
+  expect(screen.queryByText("Better")).toBeNull();
 });
 
-test("script-like text in answers and comments renders as text", async () => {
+test("Escape closes the coach panel and returns focus to the highlight", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Task Achievement: the graph go up" }));
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  // An Escape another overlay already handled leaves the panel open.
+  const handled = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  handled.preventDefault();
+  act(() => {
+    document.dispatchEvent(handled);
+  });
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByText("You wrote")).toBeNull();
+  expect(screen.getByRole("button", { name: "Task Achievement: the graph go up" })).toHaveFocus();
+});
+
+test("the comment list selects a placed comment", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: /^Use the past tense for past years\./ }));
+  expect(screen.getByText("The graph went up again in 2010.")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Highlight 2 of 2" })).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "Previous" }));
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  // Opened from the list, so focus returns to that list item once the list is back.
+  expect(screen.getByRole("button", { name: /^Use the past tense for past years\./ })).toHaveFocus();
+});
+
+test("criterion filter hides other highlights", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  const bars = await screen.findByRole("group", { name: "Criteria" });
+  const gra = within(bars).getByRole("button", { name: /Grammatical Range and Accuracy/ });
+  await user.click(gra);
+  expect(gra).toHaveAttribute("aria-pressed", "true");
+  expect(screen.queryAllByRole("button", { name: /^Task Achievement:/ })).toHaveLength(0);
+  expect(
+    screen.getByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Covers the key trends.")).toBeNull();
+
+  await user.click(gra);
+  expect(gra).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByRole("button", { name: "Task Achievement: the graph go up" })).toBeInTheDocument();
+});
+
+test("blank exam task shows the bars and no answer", async () => {
+  const base = makeWritingResult();
+  const zero = (criterion: Criterion) => ({ criterion, band: 0, comments: [] });
+  serve(
+    makeWritingResult({
+      writing: {
+        ...base.writing!,
+        tasks: [
+          base.writing!.tasks[0],
+          {
+            number: 2,
+            band: 0,
+            word_count: 0,
+            text: "",
+            criteria: [
+              zero("task_response"),
+              zero("coherence_cohesion"),
+              zero("lexical_resource"),
+              zero("grammatical_range_accuracy"),
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await essayTab(/^Task 2 · 0\.0/));
+  expect(screen.getByText("No answer")).toBeInTheDocument();
+  const bars = screen.getByRole("group", { name: "Criteria" });
+  expect(within(bars).getByRole("button", { name: /Task Response/ })).toBeInTheDocument();
+});
+
+test("unplaced comments are listed", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const other = await screen.findByRole("region", { name: "Other comments on this task" });
+  expect(within(other).getByText("No overview given.")).toBeInTheDocument();
+});
+
+test("an unplaced comment with a whitespace-only suggestion shows no Better", async () => {
+  const base = makeWritingResult();
+  const [task1, task2] = base.writing!.tasks;
+  serve(
+    makeWritingResult({
+      writing: {
+        ...base.writing!,
+        tasks: [
+          {
+            ...task1,
+            criteria: task1.criteria.map((c) =>
+              c.criterion === "task_achievement"
+                ? { ...c, comments: c.comments.map((x) => (x.quote === null ? { ...x, suggestion: "  " } : x)) }
+                : c,
+            ),
+          },
+          task2,
+        ],
+      },
+    }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const other = await screen.findByRole("region", { name: "Other comments on this task" });
+  expect(within(other).getByText("No overview given.")).toBeInTheDocument();
+  expect(within(other).queryByText(/Better/)).toBeNull();
+});
+
+test("selecting a comment scrolls its highlight into view, but Close does not", async () => {
+  const original = Element.prototype.scrollIntoView;
+  const scrolled: Element[] = [];
+  const spy = vi.fn(function (this: Element) {
+    scrolled.push(this);
+  });
+  Element.prototype.scrollIntoView = spy;
+  try {
+    serve(makeWritingResult());
+    renderWithProviders(<ResultScreen sessionId="s-1" />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /^Covers the key trends\./ }));
+    expect(spy).toHaveBeenLastCalledWith({ block: "center" });
+    expect(scrolled.at(-1)).toBe(screen.getByRole("button", { name: "Task Achievement: the graph go up" }));
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(spy).toHaveBeenLastCalledWith({ block: "center" });
+    expect(scrolled.at(-1)).toBe(
+      screen.getByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+    );
+
+    const calls = spy.mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.getByText("Tap a highlight to see the fix")).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledTimes(calls);
+  } finally {
+    Element.prototype.scrollIntoView = original;
+  }
+});
+
+test("a comment attached to an overlapping highlight shows its own quote in Better", async () => {
+  serve(
+    makeWritingResult({
+      writing: {
+        focus: [],
+        tasks: [
+          {
+            number: 1,
+            band: 6,
+            word_count: 6,
+            text: "a very big increase isn’t here.",
+            criteria: [
+              {
+                criterion: "lexical_resource",
+                band: 6,
+                comments: [
+                  { comment: "Too vague.", quote: "very big", suggestion: "very large" },
+                  { comment: "Avoid contractions.", quote: "big increase isn't", suggestion: "large rise is not" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Lexical Resource: very big" }));
+  const panel = screen.getByRole("complementary", { name: "Highlight 1 of 1" });
+  expect(within(panel).getByText("big increase isn’t", { selector: "mark" })).toBeInTheDocument();
+  expect(within(panel).getByText("a very large increase isn’t here.")).toBeInTheDocument();
+  // The overlap-attached comment replaces its own quote: no duplicated tail.
+  expect(within(panel).getByText("a very large rise is not here.")).toBeInTheDocument();
+});
+
+test("an old Reading result without sections or question types still renders", async () => {
+  const strip = (q: NonNullable<SessionResult["questions"]>[number]) => {
+    const raw: Record<string, unknown> = { ...q };
+    delete raw.section;
+    delete raw.question_type;
+    return raw;
+  };
+  const raw: Record<string, unknown> = { ...makeResult() };
+  raw.questions = makeResult().questions!.map(strip);
+  delete raw.sections;
+  serve(raw as unknown as SessionResult);
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await screen.findByRole("img", { name: "Band 5.5" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Questions" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Q1: Correct" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Q8: Incorrect" })).toBeInTheDocument();
+  expect(screen.getByText("Other: 1 of 2 right")).toBeInTheDocument();
+  const accuracy = screen.getByRole("region", { name: "Accuracy by question type" });
+  expect(within(accuracy).getByText("Other")).toBeInTheDocument();
+  expect(document.body.innerHTML).not.toMatch(/undefined|NaN/);
+  // The type filter matches questions with no type under "Other".
+  await userEvent.setup().selectOptions(screen.getByLabelText("Question type"), "Other");
+  expect(screen.getAllByRole("button", { name: /^Q\d/ })).toHaveLength(2);
+});
+
+test("an old Writing result whose tasks have no text shows No answer", async () => {
+  const base = makeWritingResult();
+  const tasks = base.writing!.tasks.map((t) => {
+    const raw: Record<string, unknown> = { ...t };
+    delete raw.text;
+    return raw;
+  });
+  serve({ ...base, writing: { ...base.writing!, tasks } } as unknown as SessionResult);
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await essayTab(/^Task 1 · 6\.0/)).toBeInTheDocument();
+  expect(screen.getByText("No answer")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^Task Achievement:/ })).toBeNull();
+  expect(document.body.innerHTML).not.toMatch(/undefined/);
+});
+
+test("blank practice task is not graded; switching task clears the selection", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Task Achievement: the graph go up" }));
+  await user.click(screen.getByRole("tab", { name: /^Task 2/ }));
+  expect(screen.getByText("Not graded: no answer")).toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "Criteria" })).toBeNull();
+  await user.click(screen.getByRole("tab", { name: /^Task 1/ }));
+  expect(screen.queryByText("You wrote")).toBeNull();
+  expect(screen.getByText("Tap a highlight to see the fix")).toBeInTheDocument();
+});
+
+test("more than three focus items lists the rest under More to focus on", async () => {
+  const base = makeWritingResult();
+  serve(makeWritingResult({ writing: { ...base.writing!, focus: ["One", "Two", "Three", "Four"] } }));
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const more = await screen.findByRole("region", { name: "More to focus on" });
+  expect(within(more).getByText("Four")).toBeInTheDocument();
+  expect(within(more).queryByText("Three")).toBeNull();
+});
+
+test("script-like text in answers, essays and comments renders as text", async () => {
   const evil = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
   const base = makeResult();
   serve(
@@ -190,6 +598,7 @@ test("script-like text in answers and comments renders as text", async () => {
             number: 1,
             band: 5,
             word_count: 3,
+            text: `Intro. ${evil} and <script>alert(1)</script> end.`,
             criteria: [
               {
                 criterion: "task_response",
@@ -203,7 +612,9 @@ test("script-like text in answers and comments renders as text", async () => {
     }),
   );
   renderWithProviders(<ResultScreen sessionId="s-1" />);
-  expect(await screen.findAllByText(evil)).toHaveLength(4);
+  // Three: the hero's "Fix these next", the essay highlight, and the comment in the panel list.
+  expect(await screen.findAllByText(evil)).toHaveLength(3);
+  expect(screen.getByText(/and <script>alert\(1\)<\/script> end\./)).toBeInTheDocument();
   expect(document.querySelector("img, script")).toBeNull();
 });
 

@@ -19,13 +19,14 @@ from core.schemas.session import (
     AnswersRequest,
     AnswersResponse,
     ResultQuestion,
+    ResultSection,
     SessionDetail,
     SessionListResponse,
     SessionRead,
     SessionResult,
     SessionStartRequest,
     SessionUpdateRequest,
-    WritingResult,
+    WritingResultView,
 )
 from core.services import auto_grading, sessions
 
@@ -124,6 +125,8 @@ async def submit_session(
 
 
 def _question(item: auto_grading.MarkedItem) -> ResultQuestion:
+    if item.spec.section is None or item.spec.question_type is None:
+        raise ValueError(f"auto-marked item {item.spec.key} has no section or question type")
     return ResultQuestion(
         number=item.spec.key,
         numbers=list(item.spec.numbers),
@@ -134,6 +137,8 @@ def _question(item: auto_grading.MarkedItem) -> ResultQuestion:
         correct_choices=item.correct_choices,
         marks=item.marks,
         max_marks=item.max_marks,
+        section=item.spec.section,
+        question_type=item.spec.question_type,
     )
 
 
@@ -141,7 +146,8 @@ def _result(
     ts: TestSession,
     info: sessions.SessionTest,
     score: auto_grading.Score | None,
-    writing: WritingResult | None,
+    writing: WritingResultView | None,
+    sections: list[ResultSection] | None,
 ) -> SessionResult:
     graded = (
         ts.grading_method == GradingMethod.AUTO and ts.raw_score is not None
@@ -166,6 +172,7 @@ def _result(
         answered=score.answered if score else None,
         questions=[_question(i) for i in score.items] if score else None,
         writing=writing,
+        sections=sections,
     )
 
 
@@ -173,5 +180,7 @@ def _result(
 async def get_session_result(
     session_id: uuid.UUID, user: CurrentUser, session: DbSession
 ) -> SessionResult:
-    ts, score, writing = await sessions.get_result(session, user, session_id)
-    return _result(ts, (await sessions.tests_for(session, [ts]))[ts.id], score, writing)
+    data = await sessions.get_result(session, user, session_id)
+    ts = data.session
+    info = (await sessions.tests_for(session, [ts]))[ts.id]
+    return _result(ts, info, data.score, data.writing, data.sections)
