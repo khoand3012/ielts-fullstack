@@ -26,7 +26,9 @@ function TaskView({ task }: { task: WritingTask }) {
       ),
     [task.criteria],
   );
-  const placed = useMemo(() => placeComments(task.text, comments), [task.text, comments]);
+  // Results saved before essay text was returned have no `text`.
+  const text = task.text ?? "";
+  const placed = useMemo(() => placeComments(text, comments), [text, comments]);
   const [filter, setFilter] = useState<Criterion | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -56,6 +58,15 @@ function TaskView({ task }: { task: WritingTask }) {
     setSelectedId(null);
   }, [placed, selectedId]);
 
+  // Bring the selected comment's highlight into view: a list item or Previous/Next may point
+  // off-screen, and on phones the bottom sheet covers the lower part of the essay.
+  useEffect(() => {
+    if (selectedId === null) return;
+    const key = findHighlight(placed, selectedId)?.key;
+    if (!key) return;
+    rootRef.current?.querySelector(`[data-highlight="${key}"]`)?.scrollIntoView?.({ block: "center" });
+  }, [placed, selectedId]);
+
   useEffect(() => {
     const targets = refocusRef.current;
     if (selectedId !== null || !targets) return;
@@ -77,7 +88,7 @@ function TaskView({ task }: { task: WritingTask }) {
   const order = placed.paragraphs.flatMap((p) =>
     p.highlights.flatMap((h) => commentsOn(h, comments, filter).slice(0, 1).map((c) => c.id)),
   );
-  const blank = task.text.trim() === "";
+  const blank = text.trim() === "";
 
   return (
     <div ref={rootRef} className={cn("grid gap-4", selectedId && "max-lg:pb-[60vh]")}>
@@ -172,10 +183,14 @@ export function WritingResultView({
                     <span className="text-xs font-normal tabular-nums">
                       {t.word_count} {t.word_count === 1 ? "word" : "words"}
                     </span>
+                    {/* The space keeps the chip a separate phrase in the tab's accessible name. */}
                     {under && (
-                      <span className="mt-0.5 rounded-full bg-amber-100 px-2 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
-                        Under {min} words
-                      </span>
+                      <>
+                        {" "}
+                        <span className="mt-0.5 rounded-full border border-state-partial bg-state-partial/15 px-2 text-xs font-medium text-foreground">
+                          Under {min} words
+                        </span>
+                      </>
                     )}
                   </TabsTrigger>
                 );

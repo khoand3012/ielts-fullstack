@@ -7,8 +7,10 @@ import { answerList, questionLabel } from "@/lib/result/format";
 import {
   type ChipState,
   chipState,
+  questionTypeKey,
   questionTypeLabel,
   sectionMarks,
+  sectionNumber,
   typeAccuracy,
 } from "@/lib/result/question-stats";
 import { cn } from "@/lib/utils";
@@ -136,7 +138,7 @@ export function QuestionGrid({
     ordered[0];
   const visible = (q: ResultQuestion) =>
     (mode === "all" || chipState(q) !== "correct") &&
-    (type === "" || q.question_type === type);
+    (type === "" || questionTypeKey(q) === type);
   const prevMistake = [...mistakes]
     .reverse()
     .find((q) => q.number < selected.number);
@@ -218,7 +220,7 @@ export function QuestionGrid({
 
         {groups.map((g) => {
           const chips = ordered.filter(
-            (q) => q.section === g.number && visible(q),
+            (q) => sectionNumber(q) === g.number && visible(q),
           );
           return (
             <section
@@ -227,7 +229,8 @@ export function QuestionGrid({
             >
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h3 className="text-sm font-semibold">
-                  {groupWord} {g.number}
+                  {/* Old results have no sections: one group, no number. */}
+                  {g.number === 0 ? "Questions" : `${groupWord} ${g.number}`}
                 </h3>
                 {g.title && (
                   <p className="min-w-0 flex-1 text-sm text-muted-foreground">

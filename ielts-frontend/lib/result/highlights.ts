@@ -10,7 +10,14 @@ export type FeedbackComment = {
 
 export type Highlight = { start: number; end: number; commentIds: string[] };
 export type EssayParagraph = { text: string; highlights: Highlight[] };
-export type PlacedEssay = { paragraphs: EssayParagraph[]; unplaced: string[] };
+/** Where a placed comment's own quote matched, in original offsets within its paragraph. */
+export type QuoteRange = { paragraph: number; start: number; end: number };
+export type PlacedEssay = {
+  paragraphs: EssayParagraph[];
+  unplaced: string[];
+  /** Keyed by comment id; a comment attached to a highlight by overlap may cover a different span. */
+  ranges: Record<string, QuoteRange>;
+};
 
 type Normalised = { norm: string; lower: string; map: number[] };
 
@@ -88,6 +95,7 @@ export function placeComments(
   const normed = texts.map(normalise);
   const used = new Map<string, Set<string>>();
   const unplaced: string[] = [];
+  const ranges: Record<string, QuoteRange> = {};
 
   function find(
     q: string,
@@ -137,6 +145,7 @@ export function placeComments(
     const end = map[idx + q.length - 1] + 1;
     taken.add(`${p}:${idx}`);
     used.set(lq, taken);
+    ranges[comment.id] = { paragraph: p, start, end };
     paragraphs[p].highlights = addHighlight(
       paragraphs[p].highlights,
       start,
@@ -145,7 +154,12 @@ export function placeComments(
     );
   }
 
-  return { paragraphs, unplaced };
+  return { paragraphs, unplaced, ranges };
+}
+
+/** `.`, `!` or `?` followed by whitespace or the paragraph end, so "2.5" and "e.g.in" don't split. */
+function endsSentence(text: string, i: number): boolean {
+  return /[.!?]/.test(text[i] ?? "") && (i + 1 === text.length || /\s/.test(text[i + 1]));
 }
 
 export function sentenceAround(
@@ -154,10 +168,10 @@ export function sentenceAround(
   end: number,
 ): { start: number; end: number } {
   let s = start;
-  while (s > 0 && !/[.!?]/.test(text[s - 1])) s--;
+  while (s > 0 && !endsSentence(text, s - 1)) s--;
   while (s < start && /\s/.test(text[s])) s++;
   // Forwards: through the next terminator (the char before `e`), or the end.
   let e = Math.max(end, s);
-  while (e < text.length && !/[.!?]/.test(text[e - 1] ?? "")) e++;
+  while (e < text.length && !endsSentence(text, e - 1)) e++;
   return { start: s, end: e };
 }

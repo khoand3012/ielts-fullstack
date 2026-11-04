@@ -135,6 +135,7 @@ describe("placeComments", () => {
     const r = placeComments("", [c("a", "x"), c("b", null)]);
     expect(r.paragraphs).toEqual([]);
     expect(r.unplaced).toEqual(["a", "b"]);
+    expect(r.ranges).toEqual({});
   });
 
   it("keeps offsets aligned when lower-casing changes length", () => {
@@ -153,5 +154,45 @@ describe("sentenceAround", () => {
   it("stops at paragraph bounds", () => {
     const t = "no punctuation";
     expect(sentenceAround(t, 3, 5)).toEqual({ start: 0, end: t.length });
+  });
+
+  it("does not split on a full stop inside a number or abbreviation", () => {
+    const t = "Before. Sales rose to 2.5 million in 2010 and fell after. Then.";
+    const whole = "Sales rose to 2.5 million in 2010 and fell after.";
+    for (const quote of ["rose to", "million in 2010"]) {
+      const at = t.indexOf(quote);
+      const r = sentenceAround(t, at, at + quote.length);
+      expect(t.slice(r.start, r.end)).toBe(whole);
+    }
+    const g = "It rose 12.5%, e.g.in March, then fell!";
+    const at = g.indexOf("then");
+    expect(sentenceAround(g, at, at + 4)).toEqual({ start: 0, end: g.length });
+  });
+});
+
+describe("placeComments ranges", () => {
+  it("records each comment's own matched range, even when attached by overlap", () => {
+    const essay = "a very big increase isn’t here.";
+    const { r, texts } = slices(essay, [
+      c("a", "very big"),
+      c("b", "big increase isn't"),
+    ]);
+    // Placement is append-only: the highlight stays "very big".
+    expect(texts).toEqual([["very big"]]);
+    expect(r.paragraphs[0].highlights[0].commentIds).toEqual(["a", "b"]);
+    const slice = (id: string) => {
+      const range = r.ranges[id];
+      return r.paragraphs[range.paragraph].text.slice(range.start, range.end);
+    };
+    expect(slice("a")).toBe("very big");
+    expect(slice("b")).toBe("big increase isn’t");
+  });
+
+  it("records the paragraph and omits unplaced comments", () => {
+    const r = placeComments("One here.\n\nTwo there.", [
+      c("a", "there"),
+      c("b", "nowhere"),
+    ]);
+    expect(r.ranges).toEqual({ a: { paragraph: 1, start: 4, end: 9 } });
   });
 });

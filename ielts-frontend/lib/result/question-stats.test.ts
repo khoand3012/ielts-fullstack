@@ -94,3 +94,23 @@ test("fixNextForQuestions skips clean types and caps at three", () => {
   expect(fixNextForQuestions([])).toEqual([]);
   expect(typeAccuracy([])).toEqual([]);
 });
+
+test("old results without section or question_type group under Other and no section", () => {
+  const old = (over: Partial<ResultQuestion>) => {
+    const raw: Record<string, unknown> = { ...q(over) };
+    delete raw.section;
+    delete raw.question_type;
+    return raw as unknown as ResultQuestion;
+  };
+  expect(questionTypeLabel(undefined)).toBe("Other");
+  expect(questionTypeLabel(null)).toBe("Other");
+  expect(questionTypeLabel("")).toBe("Other");
+  const qs = [old({ marks: 1 }), old({ marks: 0 }), q({ question_type: "", marks: 0 })];
+  expect(typeAccuracy(qs)).toEqual([
+    { type: "other", label: "Other", marks: 1, max: 3, missed: 2 },
+  ]);
+  expect(sectionMarks(qs.slice(0, 2), null)).toEqual([
+    { number: 0, title: "", marks: 1, max: 2 },
+  ]);
+  expect(fixNextForQuestions(qs)).toEqual(["Other: 1 of 3 right"]);
+});

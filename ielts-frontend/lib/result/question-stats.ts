@@ -18,12 +18,26 @@ const TYPE_LABELS: Record<string, string> = {
   fill_blank: "Gap fill",
   matching: "Matching",
   short_answer: "Short answer",
+  other: "Other",
 };
 
-export function questionTypeLabel(type: string): string {
-  const known = TYPE_LABELS[type];
+// Results saved before `section` and `question_type` existed lack them; the UI must not crash.
+
+/** The question's type, or "other" when it has none. */
+export function questionTypeKey(q: Pick<ResultQuestion, "question_type">): string {
+  return q.question_type?.trim() || "other";
+}
+
+/** The question's passage or part, or 0 (one untitled group) when it has none. */
+export function sectionNumber(q: Pick<ResultQuestion, "section">): number {
+  return q.section ?? 0;
+}
+
+export function questionTypeLabel(type: string | null | undefined): string {
+  const key = type?.trim() || "other";
+  const known = TYPE_LABELS[key];
   if (known) return known;
-  const text = type.replace(/_/g, " ");
+  const text = key.replace(/_/g, " ");
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
@@ -38,9 +52,10 @@ export type TypeAccuracy = {
 export function typeAccuracy(qs: ResultQuestion[]): TypeAccuracy[] {
   const byType = new Map<string, TypeAccuracy>();
   for (const q of qs) {
-    const row = byType.get(q.question_type) ?? {
-      type: q.question_type,
-      label: questionTypeLabel(q.question_type),
+    const type = questionTypeKey(q);
+    const row = byType.get(type) ?? {
+      type,
+      label: questionTypeLabel(type),
       marks: 0,
       max: 0,
       missed: 0,
@@ -48,7 +63,7 @@ export function typeAccuracy(qs: ResultQuestion[]): TypeAccuracy[] {
     row.marks += q.marks;
     row.max += q.max_marks;
     if (chipState(q) !== "correct") row.missed += 1;
-    byType.set(q.question_type, row);
+    byType.set(type, row);
   }
   const ratio = (r: TypeAccuracy) => (r.max > 0 ? r.marks / r.max : 0);
   return [...byType.values()].sort(
@@ -70,15 +85,16 @@ export function sectionMarks(
   const titles = new Map((sections ?? []).map((s) => [s.number, s.title]));
   const bySection = new Map<number, SectionMarks>();
   for (const q of qs) {
-    const row = bySection.get(q.section) ?? {
-      number: q.section,
-      title: titles.get(q.section) ?? "",
+    const number = sectionNumber(q);
+    const row = bySection.get(number) ?? {
+      number,
+      title: titles.get(number) ?? "",
       marks: 0,
       max: 0,
     };
     row.marks += q.marks;
     row.max += q.max_marks;
-    bySection.set(q.section, row);
+    bySection.set(number, row);
   }
   return [...bySection.values()].sort((a, b) => a.number - b.number);
 }

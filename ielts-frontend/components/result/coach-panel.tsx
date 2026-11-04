@@ -6,8 +6,8 @@ import type { WritingTask } from "@/lib/api/types";
 import { CRITERION_LABELS, CRITERION_TONE, TONE_CLASSES } from "@/lib/result/format";
 import {
   type FeedbackComment,
-  type Highlight,
   type PlacedEssay,
+  type QuoteRange,
   sentenceAround,
 } from "@/lib/result/highlights";
 import { cn } from "@/lib/utils";
@@ -25,27 +25,16 @@ function CriterionChip({ comment }: { comment: FeedbackComment }) {
   );
 }
 
-/**
- * Where this comment's own quote sits in the paragraph. A comment attached to an existing
- * highlight by overlap may quote a different span than the highlight, so look for it near the
- * highlight first; fall back to the highlight's range.
- */
-function quoteRange(text: string, h: Highlight, quote: string | null): { start: number; end: number } {
-  const q = quote?.trim().toLowerCase() ?? "";
-  if (q !== "") {
-    const hay = text.toLowerCase();
-    let overlapping: number | null = null;
-    for (let i = hay.indexOf(q); i !== -1; i = hay.indexOf(q, i + 1)) {
-      if (i === h.start) return { start: i, end: i + q.length };
-      if (overlapping === null && i < h.end && h.start < i + q.length) overlapping = i;
-    }
-    if (overlapping !== null) return { start: overlapping, end: overlapping + q.length };
-  }
-  return { start: h.start, end: h.end };
-}
-
-function Fix({ comment, text, highlight }: { comment: FeedbackComment; text: string; highlight: Highlight }) {
-  const r = quoteRange(text, highlight, comment.quote);
+/** `range` is the comment's own quote, which may differ from the highlight it is attached to. */
+function Fix({
+  comment,
+  text,
+  range: r,
+}: {
+  comment: FeedbackComment;
+  text: string;
+  range: Pick<QuoteRange, "start" | "end">;
+}) {
   const s = sentenceAround(text, r.start, r.end);
   const before = text.slice(s.start, r.start);
   const after = text.slice(r.end, s.end);
@@ -165,7 +154,12 @@ export function CoachPanel({
             </Button>
           </div>
           {shown.map((c) => (
-            <Fix key={c.id} comment={c} text={selection.paragraph.text} highlight={selection.highlight} />
+            <Fix
+              key={c.id}
+              comment={c}
+              text={selection.paragraph.text}
+              range={placed.ranges[c.id] ?? selection.highlight}
+            />
           ))}
           <div className="flex gap-2">
             <Button ref={prevRef} variant="outline" size="sm" disabled={pos <= 0} onClick={() => go("prev")}>
@@ -228,12 +222,12 @@ export function CoachPanel({
                     <CriterionChip comment={c} />
                     <p className="whitespace-pre-wrap">{c.comment}</p>
                     {c.quote && <p className="whitespace-pre-wrap text-muted-foreground">“{c.quote}”</p>}
-                    {c.suggestion && (
+                    {c.suggestion?.trim() ? (
                       <p className="whitespace-pre-wrap">
                         <span className="font-medium">Better: </span>
                         {c.suggestion}
                       </p>
-                    )}
+                    ) : null}
                   </li>
                 ))}
               </ul>

@@ -226,8 +226,13 @@ test("under-length task shows a warning chip", async () => {
   serve(withTask1Words(120));
   server.use(http.get(SESSION_URL, () => HttpResponse.json(makeWritingSession())));
   renderWithProviders(<ResultScreen sessionId="s-1" />);
-  expect(await screen.findByText("Under 150 words")).toBeInTheDocument();
+  const chip = await screen.findByText("Under 150 words");
   expect(screen.queryByText("Under 250 words")).toBeNull();
+  // The chip is announced as its own phrase, after the word count.
+  expect(screen.getByRole("tab", { name: /^Task 1 · 6\.0 120 words Under 150 words$/ })).toBeInTheDocument();
+  // Theme tokens, not hard-coded palette colours; foreground text keeps 4.5:1 on the tint.
+  expect(chip).toHaveClass("bg-state-partial/15", "text-foreground");
+  expect(chip.className).not.toMatch(/amber/);
 });
 
 test("no chip when session content fails to load", async () => {
@@ -413,6 +418,139 @@ test("unplaced comments are listed", async () => {
   renderWithProviders(<ResultScreen sessionId="s-1" />);
   const other = await screen.findByRole("region", { name: "Other comments on this task" });
   expect(within(other).getByText("No overview given.")).toBeInTheDocument();
+});
+
+test("an unplaced comment with a whitespace-only suggestion shows no Better", async () => {
+  const base = makeWritingResult();
+  const [task1, task2] = base.writing!.tasks;
+  serve(
+    makeWritingResult({
+      writing: {
+        ...base.writing!,
+        tasks: [
+          {
+            ...task1,
+            criteria: task1.criteria.map((c) =>
+              c.criterion === "task_achievement"
+                ? { ...c, comments: c.comments.map((x) => (x.quote === null ? { ...x, suggestion: "  " } : x)) }
+                : c,
+            ),
+          },
+          task2,
+        ],
+      },
+    }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const other = await screen.findByRole("region", { name: "Other comments on this task" });
+  expect(within(other).getByText("No overview given.")).toBeInTheDocument();
+  expect(within(other).queryByText(/Better/)).toBeNull();
+});
+
+test("selecting a comment scrolls its highlight into view, but Close does not", async () => {
+  const original = Element.prototype.scrollIntoView;
+  const scrolled: Element[] = [];
+  const spy = vi.fn(function (this: Element) {
+    scrolled.push(this);
+  });
+  Element.prototype.scrollIntoView = spy;
+  try {
+    serve(makeWritingResult());
+    renderWithProviders(<ResultScreen sessionId="s-1" />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /^Covers the key trends\./ }));
+    expect(spy).toHaveBeenLastCalledWith({ block: "center" });
+    expect(scrolled.at(-1)).toBe(screen.getByRole("button", { name: "Task Achievement: the graph go up" }));
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(spy).toHaveBeenLastCalledWith({ block: "center" });
+    expect(scrolled.at(-1)).toBe(
+      screen.getByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+    );
+
+    const calls = spy.mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.getByText("Tap a highlight to see the fix")).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledTimes(calls);
+  } finally {
+    Element.prototype.scrollIntoView = original;
+  }
+});
+
+test("a comment attached to an overlapping highlight shows its own quote in Better", async () => {
+  serve(
+    makeWritingResult({
+      writing: {
+        focus: [],
+        tasks: [
+          {
+            number: 1,
+            band: 6,
+            word_count: 6,
+            text: "a very big increase isn’t here.",
+            criteria: [
+              {
+                criterion: "lexical_resource",
+                band: 6,
+                comments: [
+                  { comment: "Too vague.", quote: "very big", suggestion: "very large" },
+                  { comment: "Avoid contractions.", quote: "big increase isn't", suggestion: "large rise is not" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Lexical Resource: very big" }));
+  const panel = screen.getByRole("complementary", { name: "Highlight 1 of 1" });
+  expect(within(panel).getByText("big increase isn’t", { selector: "mark" })).toBeInTheDocument();
+  expect(within(panel).getByText("a very large increase isn’t here.")).toBeInTheDocument();
+  // The overlap-attached comment replaces its own quote: no duplicated tail.
+  expect(within(panel).getByText("a very large rise is not here.")).toBeInTheDocument();
+});
+
+test("an old Reading result without sections or question types still renders", async () => {
+  const strip = (q: NonNullable<SessionResult["questions"]>[number]) => {
+    const raw: Record<string, unknown> = { ...q };
+    delete raw.section;
+    delete raw.question_type;
+    return raw;
+  };
+  const raw: Record<string, unknown> = { ...makeResult() };
+  raw.questions = makeResult().questions!.map(strip);
+  delete raw.sections;
+  serve(raw as unknown as SessionResult);
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await screen.findByRole("img", { name: "Band 5.5" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Questions" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Q1: Correct" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Q8: Incorrect" })).toBeInTheDocument();
+  expect(screen.getByText("Other: 1 of 2 right")).toBeInTheDocument();
+  const accuracy = screen.getByRole("region", { name: "Accuracy by question type" });
+  expect(within(accuracy).getByText("Other")).toBeInTheDocument();
+  expect(document.body.innerHTML).not.toMatch(/undefined|NaN/);
+  // The type filter matches questions with no type under "Other".
+  await userEvent.setup().selectOptions(screen.getByLabelText("Question type"), "Other");
+  expect(screen.getAllByRole("button", { name: /^Q\d/ })).toHaveLength(2);
+});
+
+test("an old Writing result whose tasks have no text shows No answer", async () => {
+  const base = makeWritingResult();
+  const tasks = base.writing!.tasks.map((t) => {
+    const raw: Record<string, unknown> = { ...t };
+    delete raw.text;
+    return raw;
+  });
+  serve({ ...base, writing: { ...base.writing!, tasks } } as unknown as SessionResult);
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await essayTab(/^Task 1 · 6\.0/)).toBeInTheDocument();
+  expect(screen.getByText("No answer")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^Task Achievement:/ })).toBeNull();
+  expect(document.body.innerHTML).not.toMatch(/undefined/);
 });
 
 test("blank practice task is not graded; switching task clears the selection", async () => {
