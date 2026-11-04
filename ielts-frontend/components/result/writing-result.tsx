@@ -95,12 +95,19 @@ export function WritingResultView({ writing }: { writing: WritingResult }) {
         </h2>
         {first && (
           <Tabs defaultValue={String(first.number)}>
-            <TabsList>
+            {/* Word count stacks under the band so two tabs fit a 360px screen. */}
+            <TabsList className="group-data-horizontal/tabs:h-auto">
               {writing.tasks.map((t) => (
-                <TabsTrigger key={t.number} value={String(t.number)} className="px-3">
-                  Task {t.number} · {formatBand(t.band)}{" "}
-                  <span className="font-normal tabular-nums">
-                    · {t.word_count} {t.word_count === 1 ? "word" : "words"}
+                <TabsTrigger
+                  key={t.number}
+                  value={String(t.number)}
+                  className="h-auto flex-col gap-0 px-4 py-1"
+                >
+                  <span>
+                    Task {t.number} · {formatBand(t.band)}
+                  </span>{" "}
+                  <span className="text-xs font-normal tabular-nums">
+                    {t.word_count} {t.word_count === 1 ? "word" : "words"}
                   </span>
                 </TabsTrigger>
               ))}
