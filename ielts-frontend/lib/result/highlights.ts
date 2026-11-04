@@ -63,14 +63,14 @@ function addHighlight(
   end: number,
   id: string,
 ): Highlight[] {
-  const hit = list.filter((h) => overlaps(h, start, end));
-  const rest = list.filter((h) => !overlaps(h, start, end));
-  const merged: Highlight = {
-    start: Math.min(start, ...hit.map((h) => h.start)),
-    end: Math.max(end, ...hit.map((h) => h.end)),
-    commentIds: [...hit.flatMap((h) => h.commentIds), id],
-  };
-  return [...rest, merged].sort((a, b) => a.start - b.start);
+  const existing = list.find((h) => overlaps(h, start, end));
+  if (existing) {
+    existing.commentIds.push(id);
+    return list;
+  }
+  return [...list, { start, end, commentIds: [id] }].sort(
+    (a, b) => a.start - b.start,
+  );
 }
 
 export function placeComments(
@@ -89,8 +89,11 @@ export function placeComments(
   const used = new Map<string, Set<string>>();
   const unplaced: string[] = [];
 
-  function find(q: string, field: "norm" | "lower"): [number, number] | null {
-    const taken = used.get(q) ?? new Set<string>();
+  function find(
+    q: string,
+    field: "norm" | "lower",
+    taken: Set<string>,
+  ): [number, number] | null {
     for (let p = 0; p < normed.length; p++) {
       const hay = normed[p][field];
       let from = 0;
@@ -110,14 +113,20 @@ export function placeComments(
       unplaced.push(comment.id);
       continue;
     }
-    let hit = find(q, "norm");
-    if (!hit) {
-      const lq = q
-        .split("")
-        .map((ch) => lowerChar(ch))
-        .join("");
-      hit = find(lq, "lower");
-    }
+    const lq = q
+      .split("")
+      .map((ch) => lowerChar(ch))
+      .join("");
+    // One key for checking and marking, whichever path matches.
+    const taken = used.get(lq) ?? new Set<string>();
+    // Prefer an unused occurrence; if all are used, reuse the first so the
+    // comment attaches to the existing highlight instead of going unplaced.
+    const none = new Set<string>();
+    const hit =
+      find(q, "norm", taken) ??
+      find(lq, "lower", taken) ??
+      find(q, "norm", none) ??
+      find(lq, "lower", none);
     if (!hit) {
       unplaced.push(comment.id);
       continue;
@@ -126,9 +135,8 @@ export function placeComments(
     const { map } = normed[p];
     const start = map[idx];
     const end = map[idx + q.length - 1] + 1;
-    const set = used.get(q) ?? new Set<string>();
-    set.add(`${p}:${idx}`);
-    used.set(q, set);
+    taken.add(`${p}:${idx}`);
+    used.set(lq, taken);
     paragraphs[p].highlights = addHighlight(
       paragraphs[p].highlights,
       start,

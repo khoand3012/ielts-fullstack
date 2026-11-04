@@ -8,7 +8,7 @@ import {
 function c(id: string, quote: string | null): FeedbackComment {
   return {
     id,
-    criterion: "task_achievement" as FeedbackComment["criterion"],
+    criterion: "task_achievement",
     comment: "c",
     quote,
     suggestion: null,
@@ -56,6 +56,41 @@ describe("placeComments", () => {
     ]);
   });
 
+  it("spreads case-fallback repeats and attaches extras to the first", () => {
+    const { r } = slices("The graph rose and the graph fell", [
+      c("a", "The graph"),
+      c("b", "The graph"),
+      c("c", "The graph"),
+    ]);
+    expect(r.paragraphs[0].highlights).toEqual([
+      { start: 0, end: 9, commentIds: ["a", "c"] },
+      { start: 19, end: 28, commentIds: ["b"] },
+    ]);
+    expect(r.unplaced).toEqual([]);
+  });
+
+  it("appends to the first overlapping highlight without widening", () => {
+    const { r, texts } = slices("a very big increase", [
+      c("a", "very big"),
+      c("b", "big increase"),
+    ]);
+    expect(texts).toEqual([["very big"]]);
+    expect(r.paragraphs[0].highlights[0].commentIds).toEqual(["a", "b"]);
+  });
+
+  it("does not bridge highlights", () => {
+    const { r, texts } = slices("one two three four", [
+      c("a", "one two"),
+      c("b", "three four"),
+      c("c", "two three"),
+    ]);
+    expect(texts).toEqual([["one two", "three four"]]);
+    expect(r.paragraphs[0].highlights.map((h) => h.commentIds)).toEqual([
+      ["a", "c"],
+      ["b"],
+    ]);
+  });
+
   it("merges overlapping highlights", () => {
     const { r, texts } = slices("a very big increase here", [
       c("a", "very big increase"),
@@ -71,8 +106,9 @@ describe("placeComments", () => {
       c("a", "nothing"),
       c("b", null),
       c("c", ""),
+      c("d", "   "),
     ]);
-    expect(r.unplaced).toEqual(["a", "b", "c"]);
+    expect(r.unplaced).toEqual(["a", "b", "c", "d"]);
     expect(r.paragraphs[0].highlights).toEqual([]);
   });
 
