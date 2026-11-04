@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Criterion, WritingResult, WritingTask } from "@/lib/api/types";
 import { formatBand } from "@/lib/result/format";
@@ -27,13 +27,45 @@ function TaskView({ task }: { task: WritingTask }) {
   const placed = useMemo(() => placeComments(task.text, comments), [task.text, comments]);
   const [filter, setFilter] = useState<Criterion | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const essayRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Selector for the element that opened the panel; Previous/Next keep it.
+  const openerRef = useRef<string | null>(null);
+  // Where focus goes once the panel has closed: the opener, else the current highlight.
+  const refocusRef = useRef<string[] | null>(null);
+
+  const highlightSelector = (commentId: string) => {
+    const key = findHighlight(placed, commentId)?.key;
+    return key ? `[data-highlight="${key}"]` : null;
+  };
+
+  const select = (commentId: string, origin: "essay" | "list" | "nav") => {
+    if (origin === "essay") openerRef.current = highlightSelector(commentId);
+    // The list unmounts while a comment is shown, so remember the item, not the element.
+    if (origin === "list") openerRef.current = `[data-comment-item="${commentId}"]`;
+    setSelectedId(commentId);
+  };
 
   const close = useCallback(() => {
-    const key = selectedId ? findHighlight(placed, selectedId)?.key : undefined;
+    const current = selectedId ? findHighlight(placed, selectedId)?.key : undefined;
+    refocusRef.current = [openerRef.current, current ? `[data-highlight="${current}"]` : null].filter(
+      (s): s is string => s !== null,
+    );
+    openerRef.current = null;
     setSelectedId(null);
-    if (key) essayRef.current?.querySelector<HTMLElement>(`[data-highlight="${key}"]`)?.focus();
   }, [placed, selectedId]);
+
+  useEffect(() => {
+    const targets = refocusRef.current;
+    if (selectedId !== null || !targets) return;
+    refocusRef.current = null;
+    for (const target of targets) {
+      const el = rootRef.current?.querySelector<HTMLElement>(target);
+      if (el) {
+        el.focus();
+        return;
+      }
+    }
+  }, [selectedId]);
 
   if (task.band === null) {
     return <p className="text-muted-foreground">Not graded: no answer</p>;
@@ -46,17 +78,18 @@ function TaskView({ task }: { task: WritingTask }) {
   const blank = task.text.trim() === "";
 
   return (
-    <div className={cn("grid gap-4", selectedId && "max-lg:pb-[60vh]")}>
+    <div ref={rootRef} className={cn("grid gap-4", selectedId && "max-lg:pb-[60vh]")}>
       <CriterionBars
         criteria={task.criteria}
         active={filter}
         onToggle={(c) => {
           setFilter((f) => (f === c ? null : c));
+          openerRef.current = null;
           setSelectedId(null);
         }}
       />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-        <div ref={essayRef} className="min-w-0 rounded-xl border bg-card p-4 sm:p-6">
+        <div className="min-w-0 rounded-xl border bg-card p-4 sm:p-6">
           {blank ? (
             <p className="text-muted-foreground">No answer</p>
           ) : (
@@ -65,7 +98,7 @@ function TaskView({ task }: { task: WritingTask }) {
               comments={comments}
               filter={filter}
               selectedId={selectedId}
-              onSelect={setSelectedId}
+              onSelect={(id) => select(id, "essay")}
             />
           )}
         </div>
@@ -75,7 +108,7 @@ function TaskView({ task }: { task: WritingTask }) {
           comments={shownComments}
           selectedId={selectedId}
           order={order}
-          onSelect={setSelectedId}
+          onSelect={select}
           onClose={close}
         />
       </div>

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -193,7 +193,11 @@ test("graded Writing shows the essay with highlights", async () => {
   const tab = await essayTab(/^Task 1 · 6\.0/);
   expect(tab).toHaveAttribute("aria-selected", "true");
   expect(tab).toHaveTextContent("172 words");
-  expect(screen.getByText(/between 2000 and 2020/)).toBeInTheDocument();
+  // The highlights add no visible text: each paragraph reads exactly as written.
+  expect(screen.getByText(/between 2000 and 2020/).textContent).toBe(
+    "Overall, the graph go up between 2000 and 2020.",
+  );
+  expect(screen.getByText(/again in 2010/).textContent).toBe("The graph go up again in 2010.");
   expect(screen.getByRole("button", { name: "Task Achievement: the graph go up" })).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
@@ -212,7 +216,8 @@ test("tapping a highlight opens the coach panel", async () => {
   expect(screen.getByText("You wrote")).toBeInTheDocument();
   expect(screen.getByText("Better")).toBeInTheDocument();
   expect(screen.getByText("Overall, the graph rises between 2000 and 2020.")).toBeInTheDocument();
-  expect(screen.getByText("the graph go up", { selector: "mark" })).toBeInTheDocument();
+  const panel = screen.getByRole("complementary", { name: "Highlight 1 of 2" });
+  expect(within(panel).getByText("the graph go up", { selector: "mark" })).toBeInTheDocument();
   expect(screen.getByText("Covers the key trends.")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Highlight 1 of 2" })).toHaveFocus();
 
@@ -223,9 +228,71 @@ test("tapping a highlight opens the coach panel", async () => {
 
   await user.click(screen.getByRole("button", { name: "Close" }));
   expect(screen.getByText("Tap a highlight to see the fix")).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
-  ).toHaveFocus();
+  // Next doesn't change the opener: focus goes back to the highlight that opened the panel.
+  expect(screen.getByRole("button", { name: "Task Achievement: the graph go up" })).toHaveFocus();
+});
+
+test("Previous walks back through the highlights", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  );
+  expect(screen.getByRole("heading", { name: "Highlight 2 of 2" })).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "Previous" }));
+  expect(screen.getByText("Covers the key trends.")).toBeInTheDocument();
+  expect(screen.queryByText("Use the past tense for past years.")).toBeNull();
+  // Previous is now disabled, so focus moves to the heading rather than being lost.
+  expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+  expect(screen.getByRole("heading", { name: "Highlight 1 of 2" })).toHaveFocus();
+});
+
+test("a highlight opens with Enter and with Space", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  const ta = await screen.findByRole("button", { name: "Task Achievement: the graph go up" });
+  expect(ta).toHaveAttribute("tabindex", "0");
+  ta.focus();
+  await user.keyboard("{Enter}");
+  expect(screen.getByText("Covers the key trends.")).toBeInTheDocument();
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  await user.keyboard("{Escape}");
+  expect(ta).toHaveFocus();
+  await user.keyboard(" ");
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+});
+
+test("a placed comment without a suggestion shows no Better", async () => {
+  const base = makeWritingResult();
+  const [task1, task2] = base.writing!.tasks;
+  serve(
+    makeWritingResult({
+      writing: {
+        ...base.writing!,
+        tasks: [
+          {
+            ...task1,
+            criteria: task1.criteria.map((c) =>
+              c.criterion === "grammatical_range_accuracy"
+                ? { ...c, comments: [{ ...c.comments[0], suggestion: "   " }] }
+                : c,
+            ),
+          },
+          task2,
+        ],
+      },
+    }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  );
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  expect(screen.getByText("Use the past tense for past years.")).toBeInTheDocument();
+  expect(screen.queryByText("Better")).toBeNull();
 });
 
 test("Escape closes the coach panel and returns focus to the highlight", async () => {
@@ -233,6 +300,13 @@ test("Escape closes the coach panel and returns focus to the highlight", async (
   renderWithProviders(<ResultScreen sessionId="s-1" />);
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: "Task Achievement: the graph go up" }));
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  // An Escape another overlay already handled leaves the panel open.
+  const handled = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  handled.preventDefault();
+  act(() => {
+    document.dispatchEvent(handled);
+  });
   expect(screen.getByText("You wrote")).toBeInTheDocument();
   await user.keyboard("{Escape}");
   expect(screen.queryByText("You wrote")).toBeNull();
@@ -246,6 +320,10 @@ test("the comment list selects a placed comment", async () => {
   await user.click(await screen.findByRole("button", { name: /^Use the past tense for past years\./ }));
   expect(screen.getByText("The graph went up again in 2010.")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Highlight 2 of 2" })).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "Previous" }));
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  // Opened from the list, so focus returns to that list item once the list is back.
+  expect(screen.getByRole("button", { name: /^Use the past tense for past years\./ })).toHaveFocus();
 });
 
 test("criterion filter hides other highlights", async () => {

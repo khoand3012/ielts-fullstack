@@ -91,7 +91,8 @@ export function CoachPanel({
   selectedId: string | null;
   /** One comment id per visible highlight, in essay order. */
   order: string[];
-  onSelect(commentId: string): void;
+  /** `origin` tells the view whether this selection opened the panel ("list") or moved within it. */
+  onSelect(commentId: string, origin: "list" | "nav"): void;
   onClose(): void;
 }) {
   const headingId = useId();
@@ -120,7 +121,8 @@ export function CoachPanel({
   useEffect(() => {
     if (!selected) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      // Another overlay that handled Escape first marks it handled; leave the panel open then.
+      if (e.key === "Escape" && !e.defaultPrevented) onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -130,7 +132,7 @@ export function CoachPanel({
     const id = order[pos + (dir === "next" ? 1 : -1)];
     if (!id) return;
     navRef.current = dir;
-    onSelect(id);
+    onSelect(id, "nav");
   };
 
   const unplaced = new Set(placed.unplaced);
@@ -201,7 +203,8 @@ export function CoachPanel({
                   <li key={c.id}>
                     <button
                       type="button"
-                      onClick={() => onSelect(c.id)}
+                      data-comment-item={c.id}
+                      onClick={() => onSelect(c.id, "list")}
                       className="grid w-full gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                     >
                       <span className="whitespace-pre-wrap">{c.comment}</span>

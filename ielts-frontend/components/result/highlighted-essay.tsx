@@ -58,25 +58,35 @@ export function HighlightedEssay({
           const criterion = shown[0].criterion;
           const slice = paragraph.text.slice(h.start, h.end);
           if (h.start > at) parts.push(paragraph.text.slice(at, h.start));
+          const select = () => onSelect(shown[0].id);
           parts.push(
-            <button
+            // A <button> lays out as inline-block and breaks the paragraph flow on long quotes, so
+            // the highlight is an inline mark with button semantics. Its text is only the slice,
+            // so the paragraph reads exactly as written; the criterion goes in aria-label.
+            <mark
               key={key}
-              type="button"
+              role="button"
+              tabIndex={0}
               data-highlight={key}
               aria-pressed={key === selectedKey}
-              onClick={() => onSelect(shown[0].id)}
+              aria-label={`${CRITERION_LABELS[criterion]}: ${slice}`}
+              onClick={select}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  select();
+                }
+              }}
               className={cn(
-                // Buttons lay out as inline-block; long quotes wrap inside their own box.
-                // whitespace-normal drops the name separator below at the start of the box.
-                "inline rounded-sm px-0.5 text-left whitespace-normal box-decoration-clone",
-                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                // box-decoration-clone repeats the tint, ring and radius on every line fragment.
+                "cursor-pointer rounded-sm px-0.5 box-decoration-clone",
+                "focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none",
                 TONE_CLASSES[CRITERION_TONE[criterion]].mark,
                 key === selectedKey && "ring-2 ring-foreground",
               )}
             >
-              <span className="sr-only">{CRITERION_LABELS[criterion]}:</span>{" "}
-              <span className="whitespace-pre-wrap">{slice}</span>
-            </button>,
+              {slice}
+            </mark>,
           );
           at = h.end;
         });
