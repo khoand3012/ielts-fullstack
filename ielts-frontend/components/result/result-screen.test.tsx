@@ -50,6 +50,10 @@ test("graded Reading shows the hero and a chip per item", async () => {
   expect(screen.getByText("30 min 0 s")).toBeInTheDocument();
 
   expect(screen.getByRole("button", { name: "Q1: Correct" })).toHaveTextContent(/^Q1$/);
+  // Colour is not the only signal: every chip carries a decorative state glyph.
+  for (const chip of screen.getAllByRole("button", { name: /^Q\d/ })) {
+    expect(chip.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  }
   expect(screen.getByRole("button", { name: "Q8: Incorrect" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Q20–21: Partly correct" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Passage 1" })).toBeInTheDocument();
@@ -132,7 +136,7 @@ test("null questions and null band still show the score with a note", async () =
   expect(screen.getByText("Raw score")).toBeInTheDocument();
   expect(screen.getByText("12")).toBeInTheDocument();
   expect(screen.getByText(/No band is given/)).toBeInTheDocument();
-  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^Q\d/ })).not.toBeInTheDocument();
 });
 
 test("polls while being graded, then shows the result and stops", async () => {

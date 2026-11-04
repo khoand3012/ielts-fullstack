@@ -20,7 +20,7 @@ const STATE_TEXT: Record<ChipState, string> = {
   blank: "No answer",
 };
 
-/** Foreground text on 15% tints keeps 4.5:1 in both themes; blank is told apart by its dashed border. */
+/** Foreground text on 15% tints keeps 4.5:1 in both themes; blank also has a dashed border. */
 const CHIP_CLASSES: Record<ChipState, string> = {
   correct: "border-state-correct bg-state-correct/15",
   partial: "border-state-partial bg-state-partial/15",
@@ -28,12 +28,32 @@ const CHIP_CLASSES: Record<ChipState, string> = {
   blank: "border-dashed border-muted-foreground/60 bg-transparent",
 };
 
-const SWATCH_CLASSES: Record<ChipState, string> = {
-  correct: "border-state-correct bg-state-correct/15",
-  partial: "border-state-partial bg-state-partial/15",
-  wrong: "border-state-wrong bg-state-wrong/15",
-  blank: "border-dashed border-muted-foreground/60",
-};
+/** A shape per state, so colour is never the only signal: check, half-filled circle, cross, dash. */
+function StateGlyph({ state }: { state: ChipState }) {
+  return (
+    <svg
+      viewBox="0 0 12 12"
+      aria-hidden="true"
+      focusable="false"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-3 shrink-0"
+    >
+      {state === "correct" && <path d="M2.5 6.5 5 9l4.5-5.5" />}
+      {state === "partial" && (
+        <>
+          <circle cx="6" cy="6" r="4" />
+          <path d="M6 2a4 4 0 0 0 0 8Z" fill="currentColor" stroke="none" />
+        </>
+      )}
+      {state === "wrong" && <path d="m3 3 6 6M9 3 3 9" />}
+      {state === "blank" && <path d="M3 6h6" />}
+    </svg>
+  );
+}
 
 function accuracyBarClass(ratio: number): string {
   if (ratio >= 0.85) return "bg-state-correct";
@@ -184,8 +204,13 @@ export function QuestionGrid({
             <li key={s} className="flex items-center gap-1.5">
               <span
                 aria-hidden="true"
-                className={cn("size-3 rounded-sm border-2", SWATCH_CLASSES[s])}
-              />
+                className={cn(
+                  "grid size-5 place-items-center rounded-sm border-2 text-foreground",
+                  CHIP_CLASSES[s],
+                )}
+              >
+                <StateGlyph state={s} />
+              </span>
               {STATE_TEXT[s]}
             </li>
           ))}
@@ -232,13 +257,15 @@ export function QuestionGrid({
                         aria-pressed={isSelected}
                         onClick={() => select(q)}
                         className={cn(
-                          "min-h-10 min-w-10 rounded-lg border-2 px-2 text-sm font-semibold tabular-nums text-foreground transition-shadow",
+                          // Phones: glyph above the label so "Q20–21" fits a quarter of a 360px screen.
+                          "inline-flex min-h-10 min-w-10 flex-col items-center justify-center gap-0.5 rounded-lg border-2 px-1 py-1 text-sm font-semibold tabular-nums text-foreground transition-shadow sm:flex-row sm:gap-1 sm:px-2",
                           "focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
                           CHIP_CLASSES[state],
                           isSelected &&
                             "ring-2 ring-foreground ring-offset-2 ring-offset-background",
                         )}
                       >
+                        <StateGlyph state={state} />
                         {label}
                       </button>
                     );

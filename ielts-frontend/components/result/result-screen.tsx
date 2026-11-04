@@ -25,7 +25,9 @@ function Message({ title, children }: { title: string; children?: React.ReactNod
 
 function fixNextFor(result: SessionResult): string[] {
   if (result.writing) return result.writing.focus.slice(0, 3);
-  if (result.questions) return fixNextForQuestions(result.questions);
+  if (result.questions && (result.skill === "reading" || result.skill === "listening")) {
+    return fixNextForQuestions(result.questions);
+  }
   return [];
 }
 

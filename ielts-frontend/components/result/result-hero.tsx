@@ -37,6 +37,8 @@ export function ResultHero({
   const graded = result.status === "graded";
   const band = graded ? result.band : null;
   const hasScore = graded && result.raw_score !== null;
+  // Text on the skill tint uses text-foreground: muted-foreground drops below 4.5:1 on the light
+  // theme's tint. The stats and "fix next" cards sit on opaque bg-card.
   return (
     <header
       className={cn(
@@ -51,7 +53,7 @@ export function ResultHero({
           label={band === null ? "No band" : `Band ${formatBand(band)}`}
         />
         <div className="grid min-w-0 gap-2">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm font-medium text-foreground">
             {SKILL_LABELS[result.skill]}
             {result.module &&
               (result.module === "academic"
@@ -89,7 +91,7 @@ export function ResultHero({
         </Stat>
       </dl>
       {graded && result.band === null && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-foreground">
           No band is given for this attempt (for example, a partial practice
           attempt).
         </p>
@@ -98,7 +100,7 @@ export function ResultHero({
         <section aria-labelledby="fix-next-heading" className="grid gap-2">
           <h2
             id="fix-next-heading"
-            className="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+            className="text-xs font-semibold tracking-wide text-foreground uppercase"
           >
             Fix these next
           </h2>
