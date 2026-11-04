@@ -24,6 +24,7 @@ function Message({ title, children }: { title: string; children?: React.ReactNod
 
 export function SessionScreen({ sessionId }: { sessionId: string }) {
   const [expired, setExpired] = useState(false);
+  const [unsavedText, setUnsavedText] = useState<Record<number, string> | null>(null);
   const query = useSessionQuery(sessionId, { poll: expired });
   const session = query.data?.session;
 
@@ -64,7 +65,7 @@ export function SessionScreen({ sessionId }: { sessionId: string }) {
 
   const { offsetMs } = query.data;
   const current = query.data.session;
-  if (current.status === "submitted") return <SubmittedView session={current} />;
+  if (current.status === "submitted") return <SubmittedView session={current} unsavedText={unsavedText ?? undefined} />;
 
   if (parsed?.skill !== "reading" && parsed?.skill !== "writing") {
     return <Message title="This test type isn't available yet" />;
@@ -91,7 +92,7 @@ export function SessionScreen({ sessionId }: { sessionId: string }) {
       {parsed.skill === "reading" ? (
         <ReadingScreen {...screenProps} content={parsed.content} />
       ) : (
-        <WritingScreen {...screenProps} content={parsed.content} />
+        <WritingScreen {...screenProps} content={parsed.content} onLostText={setUnsavedText} />
       )}
     </>
   );

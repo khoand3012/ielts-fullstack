@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Countdown } from "@/components/session/countdown";
 import { SaveStatus } from "@/components/session/save-status";
 import { SubmitDialog } from "@/components/session/submit-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { isAnswered } from "@/lib/answers/value";
+import { isAnswered, type AnswerValue } from "@/lib/answers/value";
 import type { SessionDetail } from "@/lib/api/types";
 import type { WritingContent } from "@/lib/content/schema";
 import { useSubmitSession } from "@/lib/session/queries";
 import { useSessionAnswers } from "@/lib/session/use-session-answers";
+import { unsavedTexts } from "@/lib/writing/unsaved";
 import { TaskEditor } from "./task-editor";
 
 type Props = {
@@ -20,7 +21,7 @@ type Props = {
   expired: boolean;
   onExpire(): void;
   onClosed(): void;
-  // Used by a later task; accepted here and not yet read.
+  /** Called, before onClosed, with typed text the server never stored. */
   onLostText?(text: Record<number, string>): void;
 };
 
@@ -30,8 +31,16 @@ function emptyNotice(numbers: number[]): string | undefined {
   return `${names} ${numbers.length === 1 ? "is" : "are"} empty`;
 }
 
-export function WritingScreen({ session, content, offsetMs, expired, onExpire, onClosed }: Props) {
-  const { answers, setAnswer, flush, status } = useSessionAnswers(session, { onClosed });
+export function WritingScreen({ session, content, offsetMs, expired, onExpire, onClosed, onLostText }: Props) {
+  const answersRef = useRef<Record<number, AnswerValue>>({});
+  const handleClosed = () => {
+    // Hand over text the server never stored before the screen is replaced.
+    const lost = unsavedTexts(answersRef.current, session.answers);
+    if (Object.keys(lost).length > 0) onLostText?.(lost);
+    onClosed();
+  };
+  const { answers, setAnswer, flush, status } = useSessionAnswers(session, { onClosed: handleClosed });
+  answersRef.current = answers;
   const submit = useSubmitSession(session.id, flush);
   const [submitOpen, setSubmitOpen] = useState(false);
 

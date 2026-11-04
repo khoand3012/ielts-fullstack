@@ -199,6 +199,25 @@ test("a writing session opens the writing screen", async () => {
   expect(screen.queryByText("This test type isn't available yet")).not.toBeInTheDocument();
 });
 
+test("writing typed but unsaved when the server closes the session stays visible", async () => {
+  backend(
+    [
+      makeSession({ skill: "writing", content: structuredClone(writing), mode: "exam", deadline: new Date(Date.now() + 60_000).toISOString() }),
+      submitted({ skill: "writing", submit_reason: "timeout" }),
+    ],
+    { put: closed },
+  );
+  const user = userEvent.setup();
+  renderWithProviders(<SessionScreen sessionId="s-1" />);
+  const boxes = await screen.findAllByRole("textbox");
+  await user.type(boxes[0], "my precious essay");
+  expect(await screen.findByRole("heading", { name: "Time's up — submitted" })).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent(/last typing was not saved/i);
+  expect(screen.getByDisplayValue("my precious essay")).toHaveAttribute("readonly");
+  expect(screen.getByRole("link", { name: "View result" })).toBeInTheDocument();
+  expect(router.replace).not.toHaveBeenCalled();
+});
+
 test("a speaking session shows that the test type isn't available yet", async () => {
   backend([makeSession({ skill: "speaking", content: {} })]);
   renderWithProviders(<SessionScreen sessionId="s-1" />);
