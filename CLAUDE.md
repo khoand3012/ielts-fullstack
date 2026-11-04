@@ -18,7 +18,7 @@ Each project has its own detailed `CLAUDE.md`. Read the one for any project you 
 - `ielts-backend/CLAUDE.md` — architecture, domain model, conventions, commands
 - `ielts-frontend/CLAUDE.md` — stack, conventions, user flows, commands
 - `ielts-backend/docs/superpowers/{specs,plans,logs}/` — design specs and plans (source of truth for backend behaviour)
-- `ielts-frontend/docs/superpowers/plans/` and `ielts-frontend/2026-10-24-frontend-handoff.md` — frontend plans and handoff
+- `ielts-frontend/docs/superpowers/plans/` and `ielts-frontend/docs/2026-10-24-frontend-handoff.md` — frontend plans and handoff
 
 ## The contract between the two projects
 

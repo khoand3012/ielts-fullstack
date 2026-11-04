@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 15.5 · TypeScript strict · Tailwind CSS v4 + shadcn/ui · TanStack Query v5 · React Hook Form + Zod · openapi-typescript + openapi-fetch · Vitest + React Testing Library + MSW (jsdom; `node` env for route handlers and middleware).
 
-**Spec:** `2026-10-24-frontend-handoff.md` (repo root) — §1–9. Backend design: `../ielts-backend/docs/superpowers/specs/2026-10-24-tests-and-sessions-design.md`. Backend branch `feat/tests-and-sessions`.
+**Spec:** `docs/2026-10-24-frontend-handoff.md` — §1–9. Backend design: `../ielts-backend/docs/superpowers/specs/2026-10-24-tests-and-sessions-design.md`. Backend branch `feat/tests-and-sessions`.
 
 **Out of scope (follow-up plans):** Writing (essay editor, word count, chart, manual-grading toggle, daily-limit 429 screen + pre-start warning), Listening (audio, once-per-part playback in exam mode), Speaking, results, dashboard, admin. See "Follow-up plans" at the end.
 
