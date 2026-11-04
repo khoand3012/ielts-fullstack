@@ -1,0 +1,17 @@
+# secrets / local env
+.env
+.env.*
+!.env.example
+
+# deps & build
+.venv/
+node_modules/
+.next/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# local tooling
+.claude/settings.local.json
+.superpowers/
