@@ -120,7 +120,7 @@ After that, admins manage other users' roles through `PATCH /admin/users/{user_i
 | `uv run python scripts/ai_check.py seed\|redteam` | Check AI grading against the real model (needs a real `OPENROUTER_API_KEY`): the seed test twice, or the prompt-injection attacks |
 | `uv run alembic revision --autogenerate -m "msg"` | Create a migration |
 | `uv run pytest` | Run tests |
-| `uv run ruff check . && uv run ruff format --check . && uv run mypy .` | Lint, format, type check |
+| `uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pyright` | Lint, format, type check (mypy and pyright) |
 
 ## Configuration
 
@@ -243,5 +243,5 @@ Cost-optimized and Cloudflare-centric:
   `fly ssh console -C "python -m core.cli set-role <email> admin"`
 
 CI (GitHub Actions, `.github/workflows/backend.yml` at the monorepo root) runs `uv sync --frozen`,
-`ruff check`, `ruff format --check`, `mypy`, and `pytest` from `ielts-backend/` on pushes to `main`
+`ruff check`, `ruff format --check`, `mypy`, `pyright`, and `pytest` from `ielts-backend/` on pushes to `main`
 and on pull requests that change files under this folder.

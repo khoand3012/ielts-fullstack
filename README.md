@@ -56,7 +56,7 @@ AI grading needs a real `OPENROUTER_API_KEY` in `ielts-backend/.env`. Without on
 | Where | Command | Purpose |
 |---|---|---|
 | `ielts-backend/` | `uv run pytest` | Tests (needs Docker, runs against a real Postgres) |
-| `ielts-backend/` | `uv run ruff check . && uv run ruff format --check . && uv run mypy .` | Lint, format, types |
+| `ielts-backend/` | `uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pyright` | Lint, format, types |
 | `ielts-frontend/` | `npm test` | Vitest suite |
 | `ielts-frontend/` | `npm run lint` and `npx tsc --noEmit` | Lint and typecheck |
 
