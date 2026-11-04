@@ -26,7 +26,7 @@ from core.settings import get_settings
 from tests.ai_helpers import FakeOpenRouter, completion, model_output
 from tests.content_factories import writing_staff
 from tests.helpers import correct_answers, publish_test
-from tests.test_ai_grading import BOTH
+from tests.test_ai_grading import BOTH, ESSAY1, ESSAY2
 
 MakeUser = Callable[..., Awaitable[tuple[User, str]]]
 Runner = tuple[GradingRunner, FakeOpenRouter]
@@ -337,6 +337,7 @@ async def test_result_writing_graded(
     assert all(len(t["criteria"]) == 4 for t in writing["tasks"])
     assert [t["band"] for t in writing["tasks"]] == [6.0, 6.0]
     assert writing["focus"]
+    assert [t["text"] for t in writing["tasks"]] == [ESSAY1, ESSAY2]
 
 
 async def test_result_writing_being_graded_states(
@@ -370,6 +371,23 @@ async def test_result_practice_blank_task(
     task1, task2 = body["writing"]["tasks"]
     assert (task1["band"], task1["criteria"]) == (None, [])
     assert task2["band"] == 6.0
+    assert task1["text"] == ""
+    assert task2["text"] == BOTH[2]
+
+
+async def test_result_writing_stored_shape_unchanged(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
+) -> None:
+    _, fake = ai_installed
+    fake.responses = [completion(model_output())]
+    user, tok = await make_user()
+    ts = await writing_submitted(app_client, db_session, user, tok, BOTH)
+
+    stored = await db_session.scalar(
+        select(AIAssessment.result).where(AIAssessment.test_session_id == ts.id)
+    )
+    assert stored is not None and stored["tasks"]
+    assert all("text" not in t for t in stored["tasks"])
 
 
 async def test_result_hides_internals(

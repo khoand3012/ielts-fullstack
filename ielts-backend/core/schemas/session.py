@@ -128,6 +128,21 @@ class WritingResult(BaseModel):
     )
 
 
+class WritingTaskView(WritingTask):
+    """A graded task as served: the feedback plus the essay as saved."""
+
+    text: str
+
+
+class WritingResultView(BaseModel):
+    """`WritingResult` as served, with each task's essay text."""
+
+    tasks: list[WritingTaskView]
+    focus: list[str] = Field(
+        description=f"The changes most likely to lift the band, most important first; {_PLAIN_TEXT}"
+    )
+
+
 class SessionResult(BaseModel):
     session_id: uuid.UUID
     test_id: uuid.UUID
@@ -148,6 +163,6 @@ class SessionResult(BaseModel):
     answered: int | None
     questions: list[ResultQuestion] | None
     # AI-graded Writing, once graded; null otherwise
-    writing: WritingResult | None = None
+    writing: WritingResultView | None = None
     # Reading passages / Listening parts, when the questions are present; null otherwise
     sections: list[ResultSection] | None = None

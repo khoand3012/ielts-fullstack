@@ -26,7 +26,7 @@ from core.schemas.session import (
     SessionResult,
     SessionStartRequest,
     SessionUpdateRequest,
-    WritingResult,
+    WritingResultView,
 )
 from core.services import auto_grading, sessions
 
@@ -146,7 +146,7 @@ def _result(
     ts: TestSession,
     info: sessions.SessionTest,
     score: auto_grading.Score | None,
-    writing: WritingResult | None,
+    writing: WritingResultView | None,
     sections: list[ResultSection] | None,
 ) -> SessionResult:
     graded = (
