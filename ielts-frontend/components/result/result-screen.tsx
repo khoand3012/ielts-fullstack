@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { SessionResult } from "@/lib/api/types";
-import { formatBand, formatDuration } from "@/lib/result/format";
 import { useResultQuery } from "@/lib/result/queries";
-import { SKILL_LABELS } from "@/lib/tests/skills";
-import { ReadingResult } from "./reading-result";
+import { fixNextForQuestions } from "@/lib/result/question-stats";
+import { QuestionGrid } from "./question-grid";
+import { ResultHero } from "./result-hero";
 import { WritingResultView } from "./writing-result";
 
 function Message({ title, children }: { title: string; children?: React.ReactNode }) {
@@ -24,53 +23,10 @@ function Message({ title, children }: { title: string; children?: React.ReactNod
   );
 }
 
-function Stat({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 text-xl font-semibold tabular-nums">{children}</dd>
-    </div>
-  );
-}
-
-function Header({ result }: { result: SessionResult }) {
-  const graded = result.status === "graded";
-  const hasScore = graded && result.raw_score !== null;
-  return (
-    <header className="grid gap-4">
-      <div>
-        <p className="text-sm text-muted-foreground">
-          {SKILL_LABELS[result.skill]}
-          {result.module && (result.module === "academic" ? " · Academic" : " · General Training")}
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">{result.title}</h1>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Badge variant="outline">{result.mode === "exam" ? "Exam" : "Practice"}</Badge>
-          {result.submit_reason === "timeout" && <Badge variant="outline">Time ran out</Badge>}
-        </div>
-      </div>
-      <dl className="grid grid-cols-2 gap-4 rounded-xl border p-4 sm:grid-cols-4">
-        <Stat label="Band">{graded ? formatBand(result.band) : "—"}</Stat>
-        {hasScore && result.max_score !== null && (
-          <Stat label="Score">
-            {result.raw_score}/{result.max_score}
-          </Stat>
-        )}
-        {hasScore && result.max_score === null && <Stat label="Raw score">{result.raw_score}</Stat>}
-        {result.answered !== null && (
-          <Stat label="Answered">
-            {result.answered}
-          </Stat>
-        )}
-        <Stat label="Time spent">{formatDuration(result.time_spent_seconds)}</Stat>
-      </dl>
-      {graded && result.band === null && (
-        <p className="text-sm text-muted-foreground">
-          No band is given for this attempt (for example, a partial practice attempt).
-        </p>
-      )}
-    </header>
-  );
+function fixNextFor(result: SessionResult): string[] {
+  if (result.writing) return result.writing.focus.slice(0, 3);
+  if (result.questions) return fixNextForQuestions(result.questions);
+  return [];
 }
 
 function Body({
@@ -110,7 +66,9 @@ function Body({
     );
   }
 
-  if (result.questions) return <ReadingResult questions={result.questions} />;
+  if (result.questions && (result.skill === "reading" || result.skill === "listening")) {
+    return <QuestionGrid questions={result.questions} sections={result.sections ?? null} skill={result.skill} />;
+  }
 
   return (
     <p className="text-sm text-muted-foreground">
@@ -196,7 +154,7 @@ function ResultContent({ sessionId, query }: { sessionId: string; query: ResultQ
           </button>
         </div>
       )}
-      <Header result={result} />
+      <ResultHero result={result} fixNext={fixNextFor(result)} />
       <Body result={result} timedOut={query.timedOut} onCheckAgain={query.checkAgain} />
       <div className="flex gap-3">
         <Button asChild variant="outline">

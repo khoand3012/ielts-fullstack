@@ -25,44 +25,104 @@ const serve = (...results: SessionResult[]) => {
 const apiError = (status: number, code: string) =>
   HttpResponse.json({ error: { code, message: code, extra: {} } }, { status });
 
-test("graded Reading shows the score header and every question", async () => {
-  serve(
-    makeResult({
-      questions: [
-        ...makeResult().questions!,
-        {
-          number: 20,
-          numbers: [20, 21],
-          kind: "choice",
-          answer: ["A", "C"],
-          accepted: ["A", "B"],
-          correct_choices: ["A"],
-          marks: 1,
-          max_marks: 2,
-          section: 2,
-          question_type: "multiple_choice",
-        },
-      ],
-    }),
-  );
+const q20 = {
+  number: 20,
+  numbers: [20, 21],
+  kind: "choice",
+  answer: ["A", "C"],
+  accepted: ["A", "B"],
+  correct_choices: ["A"],
+  marks: 1,
+  max_marks: 2,
+  section: 2,
+  question_type: "multiple_choice",
+} satisfies NonNullable<SessionResult["questions"]>[number];
+
+const withQ20 = () => makeResult({ questions: [...makeResult().questions!, q20] });
+
+test("graded Reading shows the hero and a chip per item", async () => {
+  serve(withQ20());
   renderWithProviders(<ResultScreen sessionId="s-1" />);
   expect(await screen.findByRole("heading", { name: "Practice Test 1 — Academic Reading" })).toBeInTheDocument();
-  expect(screen.getByText("5.5")).toBeInTheDocument();
+  expect(screen.getByText("5.5", { selector: "dd" })).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: "Band 5.5" })).toBeInTheDocument();
   expect(screen.getByText("1/2", { selector: "dd" })).toBeInTheDocument();
   expect(screen.getByText("30 min 0 s")).toBeInTheDocument();
 
-  const rows = screen.getAllByRole("row");
-  const q1 = within(rows.find((r) => within(r).queryByText("Q1"))!);
-  expect(q1.getByText("Correct")).toBeInTheDocument();
-  const q8 = within(rows.find((r) => within(r).queryByText("Q8"))!);
-  expect(q8.getByText("moss")).toBeInTheDocument();
-  expect(q8.getByText("Incorrect")).toBeInTheDocument();
-  expect(q8.getByText("lichen / lichens")).toBeInTheDocument();
-  const q20 = within(rows.find((r) => within(r).queryByText("Q20–21"))!);
-  expect(q20.getByText("Partly correct")).toBeInTheDocument();
-  expect(q20.getByText("(right)")).toBeInTheDocument();
-  expect(q20.getByText("(wrong)")).toBeInTheDocument();
-  expect(q20.getByText("A, B")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Q1: Correct" })).toHaveTextContent(/^Q1$/);
+  expect(screen.getByRole("button", { name: "Q8: Incorrect" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Q20–21: Partly correct" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Passage 1" })).toBeInTheDocument();
+  expect(screen.getByText("The history of glass")).toBeInTheDocument();
+});
+
+test("selecting a chip shows the answers; next mistake skips correct items", async () => {
+  serve(withQ20());
+  const user = userEvent.setup();
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  await user.click(await screen.findByRole("button", { name: "Q1: Correct" }));
+  const card = within(screen.getByRole("region", { name: "Question detail" }));
+  expect(card.getAllByText("TRUE")).toHaveLength(2);
+  expect(card.getByText("True / False / Not given")).toBeInTheDocument();
+
+  await user.click(card.getByRole("button", { name: "Next mistake" }));
+  expect(card.getByText("moss")).toBeInTheDocument();
+  expect(card.getByText("lichen / lichens")).toBeInTheDocument();
+
+  await user.click(card.getByRole("button", { name: "Next mistake" }));
+  expect(card.getByText("(right)")).toBeInTheDocument();
+  expect(card.getByText("(wrong)")).toBeInTheDocument();
+  expect(card.getByText("A, B")).toBeInTheDocument();
+
+  await user.click(card.getByRole("button", { name: "Previous mistake" }));
+  expect(card.getByText("moss")).toBeInTheDocument();
+});
+
+test("mistakes only hides correct chips", async () => {
+  serve(withQ20());
+  const user = userEvent.setup();
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  await screen.findByRole("button", { name: "Q1: Correct" });
+  await user.click(screen.getByRole("button", { name: "Mistakes only" }));
+  expect(screen.queryByRole("button", { name: "Q1: Correct" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Q8: Incorrect" })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "All" }));
+  expect(screen.getByRole("button", { name: "Q1: Correct" })).toBeInTheDocument();
+});
+
+test("type filter keeps only that type", async () => {
+  serve(withQ20());
+  const user = userEvent.setup();
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  await screen.findByRole("button", { name: "Q1: Correct" });
+  await user.selectOptions(screen.getByLabelText("Question type"), "Gap fill");
+  const chips = screen.getAllByRole("button", { name: /^Q\d/ });
+  expect(chips.map((c) => c.getAttribute("aria-label"))).toEqual(["Q8: Incorrect"]);
+});
+
+test("fix these next lists weakest types", async () => {
+  serve(makeResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await screen.findByRole("heading", { name: "Fix these next" })).toBeInTheDocument();
+  expect(screen.getByText("Gap fill: 0 of 1 right")).toBeInTheDocument();
+});
+
+test("Listening groups by part", async () => {
+  serve(
+    makeResult({ skill: "listening", module: null, sections: [{ number: 1, title: "Booking a room" }] }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await screen.findByRole("heading", { name: "Part 1" })).toBeInTheDocument();
+  expect(screen.getByText("Booking a room")).toBeInTheDocument();
+});
+
+test("empty questions renders no grid", async () => {
+  serve(makeResult({ questions: [] }));
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  expect(await screen.findByRole("img", { name: "Band 5.5" })).toBeInTheDocument();
+  expect(screen.queryByText("Accuracy by question type")).not.toBeInTheDocument();
+  expect(screen.queryByText("Fix these next")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^Q\d/ })).not.toBeInTheDocument();
 });
 
 test("null questions and null band still show the score with a note", async () => {
@@ -93,7 +153,7 @@ test("polls while being graded, then shows the result and stops", async () => {
   expect(screen.getByRole("status")).toHaveTextContent("Your result is being graded.");
 
   await vi.advanceTimersByTimeAsync(pollDelay(0) + 100);
-  expect(await screen.findByRole("table")).toBeInTheDocument();
+  expect(await screen.findByRole("img", { name: "Band 5.5" })).toBeInTheDocument();
   expect(screen.queryByText("Your result is being graded")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Your result is ready.");
 
@@ -131,7 +191,10 @@ test("graded Writing shows bands, comments, a blank task and the focus list", as
   expect(screen.getByText("the graph go up").tagName).toBe("BLOCKQUOTE");
   expect(screen.getByText("the graph rises")).toBeInTheDocument();
   expect(screen.getByText("No comments for this criterion.")).toBeInTheDocument();
-  expect(screen.getByText("Vary your sentence openings")).toBeInTheDocument();
+  const focus = screen.getByRole("region", { name: "What to focus on" });
+  expect(within(focus).getByText("Vary your sentence openings")).toBeInTheDocument();
+  const fixNext = screen.getByRole("region", { name: "Fix these next" });
+  expect(within(fixNext).getByText("Vary your sentence openings")).toBeInTheDocument();
   expect(screen.getByText(/0 words/)).toHaveTextContent("Not scored");
   expect(screen.getByText(/left blank/)).toBeInTheDocument();
 });
@@ -173,7 +236,8 @@ test("script-like text in answers and comments renders as text", async () => {
     }),
   );
   renderWithProviders(<ResultScreen sessionId="s-1" />);
-  expect(await screen.findAllByText(evil)).toHaveLength(4);
+  // The focus item shows twice: the hero's "Fix these next" and the Writing view's focus list.
+  expect(await screen.findAllByText(evil)).toHaveLength(5);
   expect(document.querySelector("img, script")).toBeNull();
 });
 

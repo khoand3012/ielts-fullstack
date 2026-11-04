@@ -41,3 +41,48 @@ export function answerList(answer: ResultQuestion["answer"]): string[] {
   const list = Array.isArray(answer) ? answer : [answer];
   return list.filter((a) => a.trim() !== "");
 }
+
+export type CriterionTone = "task" | "cc" | "lr" | "gra";
+
+export const CRITERION_TONE: Record<Criterion, CriterionTone> = {
+  task_achievement: "task",
+  task_response: "task",
+  coherence_cohesion: "cc",
+  lexical_resource: "lr",
+  grammatical_range_accuracy: "gra",
+};
+
+export const CRITERION_SHORT: Record<Criterion, string> = {
+  task_achievement: "TA",
+  task_response: "TR",
+  coherence_cohesion: "CC",
+  lexical_resource: "LR",
+  grammatical_range_accuracy: "GRA",
+};
+
+/**
+ * Literal class strings per tone (Tailwind only sees full names). `mark` is a tinted, underlined
+ * highlight — the underline keeps colour from being the only signal; text on it stays foreground.
+ */
+export const TONE_CLASSES: Record<CriterionTone, { mark: string; dot: string; bar: string }> = {
+  task: {
+    mark: "bg-crit-task/15 text-foreground underline decoration-crit-task decoration-2 underline-offset-4",
+    dot: "bg-crit-task",
+    bar: "bg-crit-task",
+  },
+  cc: {
+    mark: "bg-crit-cc/15 text-foreground underline decoration-crit-cc decoration-2 underline-offset-4",
+    dot: "bg-crit-cc",
+    bar: "bg-crit-cc",
+  },
+  lr: {
+    mark: "bg-crit-lr/15 text-foreground underline decoration-crit-lr decoration-2 underline-offset-4",
+    dot: "bg-crit-lr",
+    bar: "bg-crit-lr",
+  },
+  gra: {
+    mark: "bg-crit-gra/15 text-foreground underline decoration-crit-gra decoration-2 underline-offset-4",
+    dot: "bg-crit-gra",
+    bar: "bg-crit-gra",
+  },
+};
