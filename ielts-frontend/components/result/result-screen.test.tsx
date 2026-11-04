@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { SessionResult } from "@/lib/api/types";
+import type { Criterion, SessionResult } from "@/lib/api/types";
 import { POLL_CAP_MS, pollDelay } from "@/lib/result/queries";
 import { makeResult, makeWritingResult } from "@/tests/fixtures/result";
 import { server } from "@/tests/msw/server";
@@ -185,25 +185,151 @@ test("a 404 shows not found without retrying", async () => {
   expect(calls).toBe(1);
 });
 
-test("graded Writing shows bands, comments, a blank task and the focus list", async () => {
+const essayTab = (name: RegExp) => screen.findByRole("tab", { name });
+
+test("graded Writing shows the essay with highlights", async () => {
   serve(makeWritingResult());
   renderWithProviders(<ResultScreen sessionId="s-1" />);
-  expect(await screen.findByRole("heading", { name: "Task 1" })).toBeInTheDocument();
-  expect(screen.getByText("6.5", { selector: "dd" })).toBeInTheDocument();
-  expect(screen.getByText(/172 words/)).toBeInTheDocument();
-  expect(screen.getByText("Task Achievement")).toBeInTheDocument();
-  expect(screen.getByText("the graph go up").tagName).toBe("BLOCKQUOTE");
-  expect(screen.getByText("the graph rises")).toBeInTheDocument();
-  expect(screen.getByText("No comments for this criterion.")).toBeInTheDocument();
-  const focus = screen.getByRole("region", { name: "What to focus on" });
-  expect(within(focus).getByText("Vary your sentence openings")).toBeInTheDocument();
+  const tab = await essayTab(/^Task 1 · 6\.0/);
+  expect(tab).toHaveAttribute("aria-selected", "true");
+  expect(tab).toHaveTextContent("172 words");
+  expect(screen.getByText(/between 2000 and 2020/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Task Achievement: the graph go up" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  ).toBeInTheDocument();
   const fixNext = screen.getByRole("region", { name: "Fix these next" });
   expect(within(fixNext).getByText("Vary your sentence openings")).toBeInTheDocument();
-  expect(screen.getByText(/0 words/)).toHaveTextContent("Not scored");
-  expect(screen.getByText(/left blank/)).toBeInTheDocument();
+  // Two focus items: the hero shows both, so the Writing view adds no "More to focus on".
+  expect(screen.queryByRole("region", { name: "More to focus on" })).toBeNull();
 });
 
-test("script-like text in answers and comments renders as text", async () => {
+test("tapping a highlight opens the coach panel", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Task Achievement: the graph go up" }));
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  expect(screen.getByText("Better")).toBeInTheDocument();
+  expect(screen.getByText("Overall, the graph rises between 2000 and 2020.")).toBeInTheDocument();
+  expect(screen.getByText("the graph go up", { selector: "mark" })).toBeInTheDocument();
+  expect(screen.getByText("Covers the key trends.")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Highlight 1 of 2" })).toHaveFocus();
+
+  await user.click(screen.getByRole("button", { name: "Next" }));
+  expect(screen.getByText("Use the past tense for past years.")).toBeInTheDocument();
+  expect(screen.getByText("The graph went up again in 2010.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.getByText("Tap a highlight to see the fix")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  ).toHaveFocus();
+});
+
+test("Escape closes the coach panel and returns focus to the highlight", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Task Achievement: the graph go up" }));
+  expect(screen.getByText("You wrote")).toBeInTheDocument();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByText("You wrote")).toBeNull();
+  expect(screen.getByRole("button", { name: "Task Achievement: the graph go up" })).toHaveFocus();
+});
+
+test("the comment list selects a placed comment", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: /^Use the past tense for past years\./ }));
+  expect(screen.getByText("The graph went up again in 2010.")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Highlight 2 of 2" })).toHaveFocus();
+});
+
+test("criterion filter hides other highlights", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  const bars = await screen.findByRole("group", { name: "Criteria" });
+  const gra = within(bars).getByRole("button", { name: /Grammatical Range and Accuracy/ });
+  await user.click(gra);
+  expect(gra).toHaveAttribute("aria-pressed", "true");
+  expect(screen.queryAllByRole("button", { name: /^Task Achievement:/ })).toHaveLength(0);
+  expect(
+    screen.getByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Covers the key trends.")).toBeNull();
+
+  await user.click(gra);
+  expect(gra).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByRole("button", { name: "Task Achievement: the graph go up" })).toBeInTheDocument();
+});
+
+test("blank exam task shows the bars and no answer", async () => {
+  const base = makeWritingResult();
+  const zero = (criterion: Criterion) => ({ criterion, band: 0, comments: [] });
+  serve(
+    makeWritingResult({
+      writing: {
+        ...base.writing!,
+        tasks: [
+          base.writing!.tasks[0],
+          {
+            number: 2,
+            band: 0,
+            word_count: 0,
+            text: "",
+            criteria: [
+              zero("task_response"),
+              zero("coherence_cohesion"),
+              zero("lexical_resource"),
+              zero("grammatical_range_accuracy"),
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await essayTab(/^Task 2 · 0\.0/));
+  expect(screen.getByText("No answer")).toBeInTheDocument();
+  const bars = screen.getByRole("group", { name: "Criteria" });
+  expect(within(bars).getByRole("button", { name: /Task Response/ })).toBeInTheDocument();
+});
+
+test("unplaced comments are listed", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const other = await screen.findByRole("region", { name: "Other comments on this task" });
+  expect(within(other).getByText("No overview given.")).toBeInTheDocument();
+});
+
+test("blank practice task is not graded; switching task clears the selection", async () => {
+  serve(makeWritingResult());
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Task Achievement: the graph go up" }));
+  await user.click(screen.getByRole("tab", { name: /^Task 2/ }));
+  expect(screen.getByText("Not graded: no answer")).toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "Criteria" })).toBeNull();
+  await user.click(screen.getByRole("tab", { name: /^Task 1/ }));
+  expect(screen.queryByText("You wrote")).toBeNull();
+  expect(screen.getByText("Tap a highlight to see the fix")).toBeInTheDocument();
+});
+
+test("more than three focus items lists the rest under More to focus on", async () => {
+  const base = makeWritingResult();
+  serve(makeWritingResult({ writing: { ...base.writing!, focus: ["One", "Two", "Three", "Four"] } }));
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const more = await screen.findByRole("region", { name: "More to focus on" });
+  expect(within(more).getByText("Four")).toBeInTheDocument();
+  expect(within(more).queryByText("Three")).toBeNull();
+});
+
+test("script-like text in answers, essays and comments renders as text", async () => {
   const evil = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
   const base = makeResult();
   serve(
@@ -226,7 +352,7 @@ test("script-like text in answers and comments renders as text", async () => {
             number: 1,
             band: 5,
             word_count: 3,
-            text: "x",
+            text: `Intro. ${evil} and <script>alert(1)</script> end.`,
             criteria: [
               {
                 criterion: "task_response",
@@ -240,8 +366,9 @@ test("script-like text in answers and comments renders as text", async () => {
     }),
   );
   renderWithProviders(<ResultScreen sessionId="s-1" />);
-  // The focus item shows twice: the hero's "Fix these next" and the Writing view's focus list.
-  expect(await screen.findAllByText(evil)).toHaveLength(5);
+  // Three: the hero's "Fix these next", the essay highlight, and the comment in the panel list.
+  expect(await screen.findAllByText(evil)).toHaveLength(3);
+  expect(screen.getByText(/and <script>alert\(1\)<\/script> end\./)).toBeInTheDocument();
   expect(document.querySelector("img, script")).toBeNull();
 });
 

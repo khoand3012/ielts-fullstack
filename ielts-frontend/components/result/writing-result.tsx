@@ -1,84 +1,126 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { WritingCriterion, WritingResult, WritingTask } from "@/lib/api/types";
-import { CRITERION_LABELS, formatBand } from "@/lib/result/format";
+"use client";
 
-function CriterionBlock({ criterion }: { criterion: WritingCriterion }) {
-  return (
-    <li className="grid gap-2 border-t pt-3 first:border-t-0 first:pt-0">
-      <div className="flex items-baseline justify-between gap-3">
-        <h4 className="font-medium">{CRITERION_LABELS[criterion.criterion]}</h4>
-        <span className="text-sm font-semibold tabular-nums">
-          <span className="sr-only">Band </span>
-          {formatBand(criterion.band)}
-        </span>
-      </div>
-      {criterion.comments.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No comments for this criterion.</p>
-      ) : (
-        <ul className="grid gap-3">
-          {criterion.comments.map((c, i) => (
-            <li key={i} className="grid gap-1.5 text-sm">
-              <p className="whitespace-pre-wrap">{c.comment}</p>
-              {c.quote && (
-                <blockquote className="border-l-2 pl-3 whitespace-pre-wrap text-muted-foreground italic">
-                  {c.quote}
-                </blockquote>
-              )}
-              {c.suggestion && (
-                <p className="whitespace-pre-wrap">
-                  <span className="font-medium">Suggestion: </span>
-                  {c.suggestion}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </li>
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { Criterion, WritingResult, WritingTask } from "@/lib/api/types";
+import { formatBand } from "@/lib/result/format";
+import { type FeedbackComment, placeComments } from "@/lib/result/highlights";
+import { cn } from "@/lib/utils";
+import { CoachPanel } from "./coach-panel";
+import { CriterionBars } from "./criterion-bars";
+import { HighlightedEssay, commentsOn, findHighlight } from "./highlighted-essay";
+
+function TaskView({ task }: { task: WritingTask }) {
+  const comments = useMemo<FeedbackComment[]>(
+    () =>
+      task.criteria.flatMap((c) =>
+        c.comments.map((x, i) => ({
+          id: `${c.criterion}-${i}`,
+          criterion: c.criterion,
+          comment: x.comment,
+          quote: x.quote,
+          suggestion: x.suggestion,
+        })),
+      ),
+    [task.criteria],
   );
-}
+  const placed = useMemo(() => placeComments(task.text, comments), [task.text, comments]);
+  const [filter, setFilter] = useState<Criterion | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const essayRef = useRef<HTMLDivElement>(null);
 
-function TaskCard({ task }: { task: WritingTask }) {
-  const blank = task.band === null;
+  const close = useCallback(() => {
+    const key = selectedId ? findHighlight(placed, selectedId)?.key : undefined;
+    setSelectedId(null);
+    if (key) essayRef.current?.querySelector<HTMLElement>(`[data-highlight="${key}"]`)?.focus();
+  }, [placed, selectedId]);
+
+  if (task.band === null) {
+    return <p className="text-muted-foreground">Not graded: no answer</p>;
+  }
+
+  const shownComments = filter ? comments.filter((c) => c.criterion === filter) : comments;
+  const order = placed.paragraphs.flatMap((p) =>
+    p.highlights.flatMap((h) => commentsOn(h, comments, filter).slice(0, 1).map((c) => c.id)),
+  );
+  const blank = task.text.trim() === "";
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3>Task {task.number}</h3>
-          <span className="text-sm font-normal text-muted-foreground">
-            {task.word_count} {task.word_count === 1 ? "word" : "words"}
-            {" · "}
-            {blank ? "Not scored" : <>Band {formatBand(task.band)}</>}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {blank && task.criteria.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            This task was left blank, so it has no feedback.
-          </p>
-        ) : (
-          <ul className="grid gap-3">
-            {task.criteria.map((c) => (
-              <CriterionBlock key={c.criterion} criterion={c} />
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+    <div className={cn("grid gap-4", selectedId && "max-lg:pb-[60vh]")}>
+      <CriterionBars
+        criteria={task.criteria}
+        active={filter}
+        onToggle={(c) => {
+          setFilter((f) => (f === c ? null : c));
+          setSelectedId(null);
+        }}
+      />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        <div ref={essayRef} className="min-w-0 rounded-xl border bg-card p-4 sm:p-6">
+          {blank ? (
+            <p className="text-muted-foreground">No answer</p>
+          ) : (
+            <HighlightedEssay
+              placed={placed}
+              comments={comments}
+              filter={filter}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          )}
+        </div>
+        <CoachPanel
+          task={task}
+          placed={placed}
+          comments={shownComments}
+          selectedId={selectedId}
+          order={order}
+          onSelect={setSelectedId}
+          onClose={close}
+        />
+      </div>
+    </div>
   );
 }
 
 export function WritingResultView({ writing }: { writing: WritingResult }) {
+  // The hero's "Fix these next" shows the first three focus items.
+  const moreFocus = writing.focus.slice(3);
+  const first = writing.tasks[0];
   return (
     <div className="grid gap-6">
-      {writing.focus.length > 0 && (
-        <section aria-labelledby="focus-heading" className="grid gap-2">
-          <h2 id="focus-heading" className="text-lg font-semibold">
-            What to focus on
+      <section aria-labelledby="essay-feedback-heading" className="grid gap-4">
+        <h2 id="essay-feedback-heading" className="text-lg font-semibold">
+          Essay feedback
+        </h2>
+        {first && (
+          <Tabs defaultValue={String(first.number)}>
+            <TabsList>
+              {writing.tasks.map((t) => (
+                <TabsTrigger key={t.number} value={String(t.number)} className="px-3">
+                  Task {t.number} · {formatBand(t.band)}{" "}
+                  <span className="font-normal tabular-nums">
+                    · {t.word_count} {t.word_count === 1 ? "word" : "words"}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {/* Radix unmounts inactive panels, so switching task resets the filter and selection. */}
+            {writing.tasks.map((t) => (
+              <TabsContent key={t.number} value={String(t.number)} className="pt-2 text-base">
+                <TaskView task={t} />
+              </TabsContent>
+            ))}
+          </Tabs>
+        )}
+      </section>
+      {moreFocus.length > 0 && (
+        <section aria-labelledby="more-focus-heading" className="grid gap-2">
+          <h2 id="more-focus-heading" className="text-lg font-semibold">
+            More to focus on
           </h2>
-          <ol className="grid list-decimal gap-1 pl-5 text-sm">
-            {writing.focus.map((f, i) => (
+          <ol start={4} className="grid list-decimal gap-1 pl-5 text-sm">
+            {moreFocus.map((f, i) => (
               <li key={i} className="whitespace-pre-wrap">
                 {f}
               </li>
@@ -86,14 +128,6 @@ export function WritingResultView({ writing }: { writing: WritingResult }) {
           </ol>
         </section>
       )}
-      <section aria-labelledby="tasks-heading" className="grid gap-4">
-        <h2 id="tasks-heading" className="text-lg font-semibold">
-          Feedback by task
-        </h2>
-        {writing.tasks.map((task) => (
-          <TaskCard key={task.number} task={task} />
-        ))}
-      </section>
     </div>
   );
 }
