@@ -23,10 +23,12 @@ const content = writing as WritingContent;
 function backend() {
   const log: string[] = [];
   const puts: { question: number; value: unknown }[][] = [];
+  const putTimes: number[] = [];
   server.use(
     http.put(`${BASE}/answers`, async ({ request }) => {
       const body = (await request.json()) as { answers: { question: number; value: unknown }[] };
       log.push("PUT");
+      putTimes.push(Date.now());
       puts.push(body.answers);
       return HttpResponse.json({
         answers: Object.fromEntries(body.answers.map((a) => [String(a.question), a.value])),
@@ -37,7 +39,7 @@ function backend() {
       return HttpResponse.json(makeSession({ status: "submitted" }));
     }),
   );
-  return { log, puts };
+  return { log, puts, putTimes };
 }
 
 function session(overrides: Partial<SessionDetail> = {}) {
@@ -110,7 +112,8 @@ test("no notice when both tasks are filled", async () => {
   renderScreen(session({ answers: { "1": "one", "2": "two" } }));
   await user.click(screen.getByRole("button", { name: "Submit" }));
   const dialog = await screen.findByRole("dialog");
-  expect(within(dialog).queryByText(/empty/)).not.toBeInTheDocument();
+  expect(within(dialog).queryByText(/empty|are empty|is empty/i)).not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Submit answers" })).toBeEnabled();
 });
 
 test("both tasks empty can still be submitted and the notice names both", async () => {
@@ -124,15 +127,25 @@ test("both tasks empty can still be submitted and the notice names both", async 
   await waitFor(() => expect(log).toContain("SUBMIT"));
 });
 
-test("on expiry the banner shows and pending text is flushed without the debounce", async () => {
+test("on expiry the banner shows and pending text is flushed before the debounce would fire", async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
-  const { puts } = backend();
+  const { puts, putTimes } = backend();
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-  renderScreen(session({ mode: "exam", deadline: new Date(Date.now() + 2_000).toISOString() }));
-  await user.type(screen.getByRole("textbox", { name: "Your answer for Task 1" }), "late");
+  // Countdown ticks at 1 s and 2 s after mount; it sees 0 remaining on the 2 s tick.
+  renderScreen(session({ mode: "exam", deadline: new Date(Date.now() + 1_900).toISOString() }));
   await act(async () => {
-    vi.advanceTimersByTime(2_500);
+    vi.advanceTimersByTime(1_850);
+  });
+  // Last keystroke at ~1.85 s: the 500 ms debounce would not fire until ~2.35 s.
+  await user.type(screen.getByRole("textbox", { name: "Your answer for Task 1" }), "late");
+  const typedAt = Date.now();
+  expect(puts).toHaveLength(0);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  await act(async () => {
+    vi.advanceTimersByTime(150); // the 2 s tick: expiry, well inside the debounce window
   });
   expect(screen.getByRole("alert")).toHaveTextContent("Time's up");
   await waitFor(() => expect(puts.flat()).toContainEqual({ question: 1, value: "late" }));
+  // Sent by the expiry flush, not by the 500 ms debounce timer (fake clock).
+  expect(putTimes[0] - typedAt).toBeLessThan(400);
 });
