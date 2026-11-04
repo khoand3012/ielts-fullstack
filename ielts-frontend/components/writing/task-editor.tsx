@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import type { WritingContent } from "@/lib/content/schema";
@@ -16,6 +17,7 @@ interface TaskEditorProps {
 }
 
 export function TaskEditor({ task, value, onChange, readOnly }: TaskEditorProps) {
+  const [imageFailed, setImageFailed] = useState(false);
   const tooLong = value.length >= MAX_ESSAY_CHARS;
   const textareaId = `task-${task.number}-answer`;
   const count = countWords(value);
@@ -30,11 +32,17 @@ export function TaskEditor({ task, value, onChange, readOnly }: TaskEditorProps)
     <section className="space-y-4">
       <h2 className="text-lg font-semibold">Task {task.number}</h2>
       <p className="whitespace-pre-line">{task.prompt}</p>
-      {task.image ? (
+      {task.image && imageFailed ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          The chart couldn&apos;t be loaded. Refresh the page to try again.
+        </p>
+      ) : task.image ? (
         // Signed URL from the API; next/image is not used.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={task.image}
+          referrerPolicy="no-referrer"
+          onError={() => setImageFailed(true)}
           alt={`Task ${task.number} chart or diagram`}
           className="max-h-96 max-w-full rounded-md border"
         />

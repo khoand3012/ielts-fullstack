@@ -28,6 +28,15 @@ describe("TaskEditor", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
+  it("sends no referrer and shows a notice when the image fails to load", () => {
+    render(<TaskEditor task={{ ...baseTask, image: "https://x.test/a.png" }} value="" onChange={() => {}} />);
+    const img = screen.getByAltText("Task 1 chart or diagram");
+    expect(img).toHaveAttribute("referrerpolicy", "no-referrer");
+    fireEvent.error(img);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText(/chart couldn't be loaded/)).toBeInTheDocument();
+  });
+
   it("disables assistance attributes", () => {
     render(<TaskEditor task={baseTask} value="" onChange={() => {}} />);
     const box = screen.getByRole("textbox");

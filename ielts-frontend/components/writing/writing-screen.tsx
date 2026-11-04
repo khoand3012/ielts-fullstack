@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Countdown } from "@/components/session/countdown";
 import { SaveStatus } from "@/components/session/save-status";
 import { SubmitDialog } from "@/components/session/submit-dialog";
@@ -21,7 +21,7 @@ type Props = {
   expired: boolean;
   onExpire(): void;
   onClosed(): void;
-  /** Called, before onClosed, with typed text the server never stored. */
+  /** Called with typed text the server never stored: before onClosed, and when this screen unmounts. */
   onLostText?(text: Record<number, string>): void;
 };
 
@@ -43,10 +43,21 @@ export function WritingScreen({ session, content, offsetMs, expired, onExpire, o
   const { answers, setAnswer, flush, status, getSaved } = useSessionAnswers(session, {
     onClosed: handleClosed,
   });
+  const onLostTextRef = useRef(onLostText);
   useLayoutEffect(() => {
     answersRef.current = answers;
     getSavedRef.current = getSaved;
+    onLostTextRef.current = onLostText;
   });
+  // The session can also flip to "submitted" through a refetch, with no rejected
+  // save: when this screen goes away, hand over anything the server never stored.
+  useEffect(
+    () => () => {
+      const lost = unsavedTexts(answersRef.current, getSavedRef.current());
+      if (Object.keys(lost).length > 0) onLostTextRef.current?.(lost);
+    },
+    [],
+  );
   const submit = useSubmitSession(session.id, flush);
   const [submitOpen, setSubmitOpen] = useState(false);
 

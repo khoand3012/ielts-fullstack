@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import type { SessionRead } from "@/lib/api/types";
 
@@ -10,10 +10,12 @@ type Props = {
   session: SessionRead;
   /** Typed text the server never stored, by task number; kept on screen so it can be copied. */
   unsavedText?: Record<number, string>;
+  /** Set by the previous screen's unmount, which runs before this view's first effect. */
+  unsavedRef?: RefObject<Record<number, string> | null>;
 };
 
 /** Shown for an instant: a submitted session is sent on to its result page. */
-export function SubmittedView({ session, unsavedText }: Props) {
+export function SubmittedView({ session, unsavedText, unsavedRef }: Props) {
   const router = useRouter();
   const resultHref = `/sessions/${session.id}/result`;
   const [copyFailed, setCopyFailed] = useState<Record<string, boolean>>({});
@@ -34,9 +36,9 @@ export function SubmittedView({ session, unsavedText }: Props) {
   const lost = Object.entries(unsavedText ?? {}).filter(([, text]) => text.trim() !== "");
   const hasLost = lost.length > 0;
   useEffect(() => {
-    if (hasLost) return;
+    if (hasLost || unsavedRef?.current) return;
     router.replace(resultHref);
-  }, [router, resultHref, hasLost]);
+  }, [router, resultHref, hasLost, unsavedRef]);
 
   const timedOut = session.submit_reason === "timeout";
   return (
