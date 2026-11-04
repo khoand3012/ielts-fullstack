@@ -15,12 +15,13 @@ from tests.content_factories import (
     reading_key,
     speaking_content,
     writing_content,
+    writing_staff,
 )
 
 _DEFAULTS: dict[Skill, tuple[Any, Any, Any]] = {
     Skill.READING: (reading_content, reading_key, dict),
     Skill.LISTENING: (listening_content, listening_key, listening_staff),
-    Skill.WRITING: (writing_content, dict, dict),
+    Skill.WRITING: (writing_content, dict, writing_staff),
     Skill.SPEAKING: (speaking_content, dict, dict),
 }
 

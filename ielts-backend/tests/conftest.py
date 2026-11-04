@@ -18,6 +18,8 @@ from uuid_utils.compat import uuid7
 
 if TYPE_CHECKING:
     from core.models import Role, User
+    from core.services.ai_grading import GradingRunner
+    from tests.ai_helpers import FakeOpenRouter
 
 # Set required env BEFORE any test imports a core.* module that calls
 # get_settings() at import time. Placeholder values are fine: the real DB tests
@@ -32,6 +34,8 @@ os.environ.setdefault("OPENROUTER_API_KEY", "x")
 # The app's auto-submit loop would use core.db's placeholder engine; tests drive it directly.
 os.environ.setdefault("AUTO_SUBMIT_ENABLED", "false")
 os.environ.setdefault("STARTUP_SCORING_ENABLED", "false")
+os.environ.setdefault("AI_GRADING_ENABLED", "false")
+os.environ.setdefault("AI_RESUME_ON_STARTUP", "false")
 
 
 @pytest.fixture(scope="session")
@@ -101,3 +105,42 @@ async def make_user(
         return user, create_access_token(str(user.id))
 
     return _make
+
+
+@pytest_asyncio.fixture
+async def ai_runner(
+    _engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[tuple["GradingRunner", "FakeOpenRouter"]]:
+    """A grading runner on the test database whose OpenRouter calls go to a fake, with no
+    backoff between attempts and a stub chart image."""
+    from core.ai.client import OpenRouterClient
+    from core.services.ai_grading import GradingRunner
+    from core.settings import get_settings
+    from tests.ai_helpers import FakeOpenRouter
+
+    monkeypatch.setattr(get_settings(), "ai_backoff_seconds", 0)
+    fake = FakeOpenRouter()
+    client = OpenRouterClient.from_settings(transport=fake.transport())
+
+    async def read_image(key: str) -> tuple[bytes, str]:
+        return b"png", "image/png"
+
+    runner = GradingRunner(async_sessionmaker(_engine, expire_on_commit=False), client, read_image)
+    try:
+        yield runner, fake
+    finally:
+        await client.aclose()
+
+
+@pytest_asyncio.fixture
+async def ai_installed(
+    ai_runner: tuple["GradingRunner", "FakeOpenRouter"],
+) -> AsyncIterator[tuple["GradingRunner", "FakeOpenRouter"]]:
+    """`ai_runner`, installed so that submissions schedule grading as in the app."""
+    from core.services import ai_grading
+
+    ai_grading.install(ai_runner[0])
+    try:
+        yield ai_runner
+    finally:
+        await ai_grading.shutdown()

@@ -136,6 +136,15 @@ Rules:
   e.g. during a long OpenRouter / model outage that would flood the queue; when off, the
   row is just `failed` as in the foundation spec *(my call)*.
 
+*(Added by the AI grading spec, `2026-10-27-ai-writing-grading-design.md`.)*
+Phase 5 shipped without the queue: a `failed` row stays `failed` and the student
+keeps seeing "being graded"; `regrade-ai` retries it. Phase 8 therefore adds a
+one-off step that moves every existing `failed` row into the queue
+(`origin = ai_fallback`), and does the same for `held` rows — AI grades held for
+suspected manipulation — with a new origin **`ai_flagged`**: the teacher sees
+the signals and the AI's draft grade, and grades the essay themselves. From then
+on, new `held` rows go to the queue directly and `held-ai` is retired.
+
 ## 5. Human grading flow (both skills)
 
 ### 5.1 States
@@ -253,7 +262,7 @@ Examples: 6.125 → 6.0, 6.25 → 6.5, 6.375 → 6.5, 6.625 → 6.5, 6.75 → 7.
   - `test_session_id` FK, **unique**
   - `skill` (`speaking` | `writing`), `status`
   - `origin` — why it is human-graded: `speaking` | `student_request` |
-    `ai_fallback`
+    `ai_fallback` | `ai_flagged` (§4.1)
   - `claimed_by` FK users nullable, `claimed_at` nullable
   - `scores` JSONB nullable — per-skill shape (§6) validated by a Pydantic
     schema per skill; criteria, comments and feedback live here *(my call: the
@@ -274,7 +283,7 @@ New OpenAPI tags `grading` and `admin`; stable `operation_id`s.
 | Who | Method & path | Purpose |
 |---|---|---|
 | student | `POST /sessions/{id}/submit` | Writing body adds `request_manual_grading` |
-| student | `GET /sessions/{id}/result` | status `being_graded \| graded` + result, for AI and human alike *(my call: AI `processing` shows as `being_graded`, `ready` as `graded`; a `failed` AI job is never shown — it became a human grade — unless `AI_FAILURE_FALLBACK_TO_TEACHER` is off, then status `failed`)*. If a `HumanGrade` exists for the session, it is the result |
+| student | `GET /sessions/{id}/result` | status `being_graded \| graded` + result, for AI and human alike *(my call: AI `processing` shows as `being_graded`, `ready` as `graded`; students never see a failure: `processing`, `held` and `failed` AI jobs all show as `being_graded`, even with `AI_FAILURE_FALLBACK_TO_TEACHER` off)*. If a `HumanGrade` exists for the session, it is the result |
 | teacher | `GET /grading/queue?skill=` | unclaimed, oldest first |
 | teacher | `GET /grading/mine` | my active claims |
 | teacher | `POST /grading/{grade_id}/claim` | 409 if taken, 409 over claim limit, 403 own test |

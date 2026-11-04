@@ -146,11 +146,15 @@ def writing_content() -> dict[str, Any]:
                 "number": 1,
                 "prompt": "Describe the chart.",
                 "min_words": 150,
-                "image": "tests/f/task1.svg",
+                "image": "tests/f/task1.png",
             },
             {"number": 2, "prompt": "Discuss.", "min_words": 250, "image": None},
         ]
     }
+
+
+def writing_staff() -> dict[str, Any]:
+    return {"examiner_notes": {1: "Car use falls from 60% to 35%."}}
 
 
 def speaking_content() -> dict[str, Any]:

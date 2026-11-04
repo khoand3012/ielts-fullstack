@@ -3,20 +3,26 @@
 - ``python -m core.cli set-role <email> <role>``
 - ``python -m core.cli load-test <file.json> [--publish]``
 - ``python -m core.cli regrade-auto [--all]``
+- ``python -m core.cli regrade-ai`` (retry failed AI grading)
+- ``python -m core.cli held-ai list | show <id> | release <id> --by <admin-email>``
 """
 
 import argparse
 import asyncio
 import sys
+import uuid
 from collections.abc import Sequence
 from pathlib import Path
 
 from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from core.ai.client import OpenRouterClient
 from core.db import async_session_factory
-from core.exceptions import NotFoundError, ValidationAppError
+from core.exceptions import ForbiddenError, NotFoundError, ValidationAppError
 from core.models import Role
+from core.services import ai_review
+from core.services.ai_grading import GradingRunner, regrade_failed
 from core.services.sessions import rescore_sessions
 from core.services.test_loader import load_test_file
 from core.services.users import set_role_by_email
@@ -41,6 +47,15 @@ def build_parser() -> argparse.ArgumentParser:
     regrade.add_argument(
         "--all", action="store_true", help="re-score every session, overwriting stored scores"
     )
+    commands.add_parser("regrade-ai", help="retry AI grading of every failed Writing session")
+    held = commands.add_parser("held-ai", help="review AI grades held for suspected manipulation")
+    held_commands = held.add_subparsers(dest="held_command", required=True)
+    held_commands.add_parser("list", help="every held essay, oldest first")
+    show = held_commands.add_parser("show", help="a held essay with its signals and essays")
+    show.add_argument("assessment_id", type=uuid.UUID)
+    release = held_commands.add_parser("release", help="a false alarm: the AI grade stands")
+    release.add_argument("assessment_id", type=uuid.UUID)
+    release.add_argument("--by", required=True, help="the releasing admin's email")
     return parser
 
 
@@ -53,6 +68,10 @@ async def run(
         return await _load_test(args.path, args.publish, session_factory)
     if args.command == "regrade-auto":
         return await _regrade_auto(args.all, session_factory)
+    if args.command == "regrade-ai":
+        return await _regrade_ai(session_factory)
+    if args.command == "held-ai":
+        return await _held_ai(args, session_factory)
     return await _set_role(args.email, args.role, session_factory)
 
 
@@ -95,6 +114,56 @@ async def _regrade_auto(everything: bool, session_factory: async_sessionmaker[As
     if counts.failed:
         print(f"failed to score {counts.failed} sessions (see log)", file=sys.stderr)
         return 1
+    return 0
+
+
+async def _regrade_ai(session_factory: async_sessionmaker[AsyncSession]) -> int:
+    client = OpenRouterClient.from_settings()
+    try:
+        counts = await regrade_failed(GradingRunner(session_factory, client))
+    finally:
+        await client.aclose()
+    print(f"graded {counts.ready} ready, {counts.held} held")
+    if counts.failed:
+        print(f"failed to grade {counts.failed} sessions (see log)", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _print_held(item: ai_review.HeldItem) -> None:
+    sources = ",".join(sorted({s["source"] for s in item.signals}))
+    print(
+        f"{item.assessment_id} {item.email} submitted {item.submitted_at.isoformat()} "
+        f"band {item.band} (task 1 {item.task1_band}, task 2 {item.task2_band}) "
+        f"signals {sources}"
+    )
+
+
+async def _held_ai(
+    args: argparse.Namespace, session_factory: async_sessionmaker[AsyncSession]
+) -> int:
+    async with session_factory() as session:
+        try:
+            if args.held_command == "list":
+                items = await ai_review.list_held(session)
+                for item in items:
+                    _print_held(item)
+                if not items:
+                    print("no held essays")
+            elif args.held_command == "show":
+                item, essays = await ai_review.get_held(session, args.assessment_id)
+                _print_held(item)
+                print(f"session {item.session_id}")
+                for signal in item.signals:
+                    print(f"- {signal['source']} (task {signal['task']}): {signal['detail']}")
+                for task, essay in essays.items():
+                    print(f"\n--- Task {task} ---\n{essay}")
+            else:
+                await ai_review.release_held(session, args.assessment_id, args.by)
+                print(f"released {args.assessment_id}")
+        except (NotFoundError, ForbiddenError) as exc:
+            print(exc.message, file=sys.stderr)
+            return 1
     return 0
 
 

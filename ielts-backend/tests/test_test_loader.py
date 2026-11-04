@@ -60,28 +60,28 @@ async def test_load_without_publish_stays_draft(db_session: AsyncSession, tmp_pa
 
 
 async def test_load_uploads_assets_to_their_keys(db_session: AsyncSession, tmp_path: Path) -> None:
-    (tmp_path / "chart.svg").write_text("<svg/>", encoding="utf-8")
-    data = make_file("writing", writing_content(), assets={"tests/f/task1.svg": "chart.svg"})
+    (tmp_path / "chart.png").write_text("<svg/>", encoding="utf-8")
+    data = make_file("writing", writing_content(), assets={"tests/f/task1.png": "chart.png"})
     upload = FakeUploader()
     result = await load_test_file(db_session, write(tmp_path, data), publish=True, upload=upload)
     [(key, local, content_type)] = upload.calls
-    assert local == tmp_path / "chart.svg"
-    assert content_type == "image/svg+xml"
+    assert local == tmp_path / "chart.png"
+    assert content_type == "image/png"
     # stored under a key that depends on the file's bytes, and the content points at it
-    assert key.startswith(f"tests/{data['slug']}/") and key.endswith("/chart.svg")
+    assert key.startswith(f"tests/{data['slug']}/") and key.endswith("/chart.png")
     assert result.version.content["tasks"][0]["image"] == key
 
 
 async def test_changed_asset_never_overwrites_a_published_versions_file(
     db_session: AsyncSession, tmp_path: Path
 ) -> None:
-    (tmp_path / "chart.svg").write_text("<svg>v1</svg>", encoding="utf-8")
-    data = make_file("writing", writing_content(), assets={"tests/f/task1.svg": "chart.svg"})
+    (tmp_path / "chart.png").write_text("<svg>v1</svg>", encoding="utf-8")
+    data = make_file("writing", writing_content(), assets={"tests/f/task1.png": "chart.png"})
     path = write(tmp_path, data)
     upload = FakeUploader()
     v1 = (await load_test_file(db_session, path, publish=True, upload=upload)).version
 
-    (tmp_path / "chart.svg").write_text("<svg>v2</svg>", encoding="utf-8")
+    (tmp_path / "chart.png").write_text("<svg>v2</svg>", encoding="utf-8")
     v2 = (await load_test_file(db_session, path, publish=False, upload=upload)).version
 
     first_key, second_key = (call[0] for call in upload.calls)
@@ -91,7 +91,7 @@ async def test_changed_asset_never_overwrites_a_published_versions_file(
 
 
 async def test_missing_asset_file_rejected(db_session: AsyncSession, tmp_path: Path) -> None:
-    data = make_file("writing", writing_content(), assets={"tests/f/task1.svg": "nope.svg"})
+    data = make_file("writing", writing_content(), assets={"tests/f/task1.png": "nope.png"})
     with pytest.raises(ValidationAppError):
         await load_test_file(
             db_session, write(tmp_path, data), publish=False, upload=FakeUploader()
@@ -150,9 +150,9 @@ async def test_load_reading_without_module_rejected(
 
 
 async def test_load_writing_with_module_rejected(db_session: AsyncSession, tmp_path: Path) -> None:
-    (tmp_path / "chart.svg").write_text("<svg/>", encoding="utf-8")
+    (tmp_path / "chart.png").write_text("<svg/>", encoding="utf-8")
     data = make_file(
-        "writing", writing_content(), module="academic", assets={"tests/f/task1.svg": "chart.svg"}
+        "writing", writing_content(), module="academic", assets={"tests/f/task1.png": "chart.png"}
     )
     upload = FakeUploader()
     with pytest.raises(ValidationAppError):
@@ -168,3 +168,20 @@ async def test_load_stores_module(db_session: AsyncSession, tmp_path: Path) -> N
         db_session, write(tmp_path, data), publish=True, upload=FakeUploader()
     )
     assert result.version.module == "general_training"
+
+
+async def test_seed_writing_loads_clean(db_session: AsyncSession) -> None:
+    data = json.loads((SEED / "practice-01-writing.json").read_text(encoding="utf-8"))
+    data["slug"] = f"seed-writing-{uuid7()}"
+    copy = SEED / f".tmp-{uuid7()}.json"
+    copy.write_text(json.dumps(data), encoding="utf-8")
+    upload = FakeUploader()
+    try:
+        result = await load_test_file(db_session, copy, publish=True, upload=upload)
+    finally:
+        copy.unlink()
+    assert result.problems == [] and result.published is True
+    assert [key for key, _, _ in upload.calls] and all(
+        key.endswith(".png") for key, _, _ in upload.calls
+    )
+    assert "1" in result.version.staff_content["examiner_notes"]

@@ -24,8 +24,14 @@ def load_answer_key(version: TestVersion) -> AnswerKey:
     return _answer_key.validate_python(version.answer_key)
 
 
+def load_staff_content(version: TestVersion) -> StaffContent:
+    return StaffContent.model_validate(version.staff_content)
+
+
 def problems_for(skill: Skill, version: TestVersion) -> list[Problem]:
-    return validate_version(skill, load_content(skill, version), load_answer_key(version))
+    return validate_version(
+        skill, load_content(skill, version), load_answer_key(version), load_staff_content(version)
+    )
 
 
 def check_module(skill: Skill, module: Module | None) -> None:

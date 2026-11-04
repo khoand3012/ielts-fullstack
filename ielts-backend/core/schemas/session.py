@@ -5,7 +5,15 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, PlainSerializer
 
-from core.models import GradingMethod, Module, SessionMode, SessionStatus, Skill, SubmitReason
+from core.models import (
+    Criterion,
+    GradingMethod,
+    Module,
+    SessionMode,
+    SessionStatus,
+    Skill,
+    SubmitReason,
+)
 
 # Bands are Decimal in Python and a plain JSON number (7.0) in the API; halves are exact floats.
 Band = Annotated[Decimal, PlainSerializer(float, return_type=float, when_used="json")]
@@ -52,6 +60,8 @@ class SessionRead(BaseModel):
     module: Module | None
     # Reading/Listening, once scored; a partial practice attempt has a mark but no band
     raw_score: int | None
+    # Reading/Listening once scored, Writing once AI-graded; null for a practice attempt
+    # with a blank task
     band: Band | None
     server_time: datetime
 
@@ -78,6 +88,39 @@ class ResultQuestion(BaseModel):
     max_marks: int
 
 
+_PLAIN_TEXT = "plain text — render as text, never HTML or Markdown"
+
+
+class WritingComment(BaseModel):
+    comment: str = Field(description=f"What is right or wrong and why; {_PLAIN_TEXT}")
+    quote: str | None = Field(description=f"The student's own words, exactly; {_PLAIN_TEXT}")
+    suggestion: str | None = Field(description=f"A better version of the quote; {_PLAIN_TEXT}")
+
+
+class WritingCriterion(BaseModel):
+    criterion: Criterion
+    band: Band
+    # empty for a blank exam task, which scores 0
+    comments: list[WritingComment]
+
+
+class WritingTask(BaseModel):
+    number: int
+    # null for a blank practice task, which isn't graded
+    band: Band | None
+    word_count: int
+    criteria: list[WritingCriterion]
+
+
+class WritingResult(BaseModel):
+    """The AI's feedback on a Writing session, as stored on the assessment and served."""
+
+    tasks: list[WritingTask]
+    focus: list[str] = Field(
+        description=f"The changes most likely to lift the band, most important first; {_PLAIN_TEXT}"
+    )
+
+
 class SessionResult(BaseModel):
     session_id: uuid.UUID
     test_id: uuid.UUID
@@ -97,3 +140,5 @@ class SessionResult(BaseModel):
     band: Band | None
     answered: int | None
     questions: list[ResultQuestion] | None
+    # AI-graded Writing, once graded; null otherwise
+    writing: WritingResult | None = None

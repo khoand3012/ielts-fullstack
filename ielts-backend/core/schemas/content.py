@@ -3,7 +3,7 @@
 Asset fields (`audio`, `image`) hold R2 object keys, never URLs.
 """
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -116,8 +116,14 @@ class TranscriptLine(_Strict):
     text: str
 
 
+ExaminerNote = Annotated[str, Field(min_length=1, max_length=2000)]
+
+
 class StaffContent(_Strict):
     transcripts: dict[int, list[TranscriptLine]] = {}
+    # Writing: per task, the key figures and features a good answer covers. The AI grader
+    # trusts it over its own reading of the chart. Never shown to students.
+    examiner_notes: dict[int, ExaminerNote] = {}
 
 
 Content = ReadingContent | ListeningContent | WritingContent | SpeakingContent

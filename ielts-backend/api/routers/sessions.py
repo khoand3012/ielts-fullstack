@@ -17,6 +17,7 @@ from core.schemas.session import (
     SessionResult,
     SessionStartRequest,
     SessionUpdateRequest,
+    WritingResult,
 )
 from core.services import auto_grading, sessions
 
@@ -128,9 +129,14 @@ def _question(item: auto_grading.MarkedItem) -> ResultQuestion:
 
 
 def _result(
-    ts: TestSession, info: sessions.SessionTest, score: auto_grading.Score | None
+    ts: TestSession,
+    info: sessions.SessionTest,
+    score: auto_grading.Score | None,
+    writing: WritingResult | None,
 ) -> SessionResult:
-    graded = ts.grading_method == GradingMethod.AUTO and ts.raw_score is not None
+    graded = (
+        ts.grading_method == GradingMethod.AUTO and ts.raw_score is not None
+    ) or writing is not None
     return SessionResult(
         session_id=ts.id,
         test_id=info.test.id,
@@ -150,6 +156,7 @@ def _result(
         band=ts.band if graded else None,
         answered=score.answered if score else None,
         questions=[_question(i) for i in score.items] if score else None,
+        writing=writing,
     )
 
 
@@ -157,5 +164,5 @@ def _result(
 async def get_session_result(
     session_id: uuid.UUID, user: CurrentUser, session: DbSession
 ) -> SessionResult:
-    ts, score = await sessions.get_result(session, user, session_id)
-    return _result(ts, (await sessions.tests_for(session, [ts]))[ts.id], score)
+    ts, score, writing = await sessions.get_result(session, user, session_id)
+    return _result(ts, (await sessions.tests_for(session, [ts]))[ts.id], score, writing)
