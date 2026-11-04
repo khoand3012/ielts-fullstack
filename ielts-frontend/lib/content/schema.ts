@@ -8,7 +8,7 @@ const OptionSchema = z.object({ key: z.string(), text: z.string() });
 
 const QuestionItemSchema = z.object({
   numbers: z.array(z.number().int()).min(1),
-  prompt: z.string().nullable(),
+  prompt: z.string().nullish(),
   options: z.array(OptionSchema).nullish(),
 });
 
@@ -30,7 +30,7 @@ const ReadingContentSchema = z.object({
     z.object({
       number: z.number().int(),
       title: z.string(),
-      paragraphs: z.array(z.object({ label: z.string().nullable(), text: z.string() })),
+      paragraphs: z.array(z.object({ label: z.string().nullish(), text: z.string() })),
       question_groups: z.array(QuestionGroupSchema),
     }),
   ),
@@ -41,7 +41,7 @@ const ListeningContentSchema = z.object({
     z.object({
       number: z.number().int(),
       title: z.string(),
-      audio: z.string().nullable(),
+      audio: z.string().nullish(),
       question_groups: z.array(QuestionGroupSchema),
     }),
   ),
@@ -53,7 +53,7 @@ const WritingContentSchema = z.object({
       number: z.number().int(),
       prompt: z.string(),
       min_words: z.number().int(),
-      image: z.string().nullable(),
+      image: z.string().nullish(),
     }),
   ),
 });

@@ -244,6 +244,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sessions/{session_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session Result */
+        get: operations["get_session_result"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -268,6 +285,12 @@ export interface components {
             };
         };
         /**
+         * Criterion
+         * @description IELTS Writing criteria; Task 1 is judged on Task Achievement, Task 2 on Task Response.
+         * @enum {string}
+         */
+        Criterion: "task_achievement" | "task_response" | "coherence_cohesion" | "lexical_resource" | "grammatical_range_accuracy";
+        /**
          * GradingMethod
          * @enum {string}
          */
@@ -288,6 +311,12 @@ export interface components {
             password: string;
         };
         /**
+         * Module
+         * @description Which Reading test a version is: it picks the raw-mark band table.
+         * @enum {string}
+         */
+        Module: "academic" | "general_training";
+        /**
          * Plan
          * @enum {string}
          */
@@ -306,6 +335,28 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** ResultQuestion */
+        ResultQuestion: {
+            /** Number */
+            number: number;
+            /** Numbers */
+            numbers: number[];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "single_choice" | "choice";
+            /** Answer */
+            answer: string | string[] | null;
+            /** Accepted */
+            accepted: string[];
+            /** Correct Choices */
+            correct_choices: string[] | null;
+            /** Marks */
+            marks: number;
+            /** Max Marks */
+            max_marks: number;
         };
         /**
          * Role
@@ -347,6 +398,11 @@ export interface components {
             /** Request Manual Grading */
             request_manual_grading: boolean;
             grading_method: components["schemas"]["GradingMethod"] | null;
+            module: components["schemas"]["Module"] | null;
+            /** Raw Score */
+            raw_score: number | null;
+            /** Band */
+            band: number | null;
             /**
              * Server Time
              * Format: date-time
@@ -408,11 +464,61 @@ export interface components {
             /** Request Manual Grading */
             request_manual_grading: boolean;
             grading_method: components["schemas"]["GradingMethod"] | null;
+            module: components["schemas"]["Module"] | null;
+            /** Raw Score */
+            raw_score: number | null;
+            /** Band */
+            band: number | null;
             /**
              * Server Time
              * Format: date-time
              */
             server_time: string;
+        };
+        /** SessionResult */
+        SessionResult: {
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /**
+             * Test Id
+             * Format: uuid
+             */
+            test_id: string;
+            /** Title */
+            title: string;
+            skill: components["schemas"]["Skill"];
+            module: components["schemas"]["Module"] | null;
+            mode: components["schemas"]["SessionMode"];
+            submit_reason: components["schemas"]["SubmitReason"] | null;
+            grading_method: components["schemas"]["GradingMethod"] | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Submitted At */
+            submitted_at: string | null;
+            /** Time Spent Seconds */
+            time_spent_seconds: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "graded" | "being_graded";
+            /** Raw Score */
+            raw_score: number | null;
+            /** Max Score */
+            max_score: number | null;
+            /** Band */
+            band: number | null;
+            /** Answered */
+            answered: number | null;
+            /** Questions */
+            questions: components["schemas"]["ResultQuestion"][] | null;
+            writing?: components["schemas"]["WritingResult"] | null;
         };
         /** SessionStartRequest */
         SessionStartRequest: {
@@ -462,6 +568,7 @@ export interface components {
             title: string;
             /** Exam Time Limit Minutes */
             exam_time_limit_minutes: number;
+            module: components["schemas"]["Module"] | null;
         };
         /** TokenResponse */
         TokenResponse: {
@@ -522,6 +629,56 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WritingComment */
+        WritingComment: {
+            /**
+             * Comment
+             * @description What is right or wrong and why; plain text — render as text, never HTML or Markdown
+             */
+            comment: string;
+            /**
+             * Quote
+             * @description The student's own words, exactly; plain text — render as text, never HTML or Markdown
+             */
+            quote: string | null;
+            /**
+             * Suggestion
+             * @description A better version of the quote; plain text — render as text, never HTML or Markdown
+             */
+            suggestion: string | null;
+        };
+        /** WritingCriterion */
+        WritingCriterion: {
+            criterion: components["schemas"]["Criterion"];
+            /** Band */
+            band: number;
+            /** Comments */
+            comments: components["schemas"]["WritingComment"][];
+        };
+        /**
+         * WritingResult
+         * @description The AI's feedback on a Writing session, as stored on the assessment and served.
+         */
+        WritingResult: {
+            /** Tasks */
+            tasks: components["schemas"]["WritingTask"][];
+            /**
+             * Focus
+             * @description The changes most likely to lift the band, most important first; plain text — render as text, never HTML or Markdown
+             */
+            focus: string[];
+        };
+        /** WritingTask */
+        WritingTask: {
+            /** Number */
+            number: number;
+            /** Band */
+            band: number | null;
+            /** Word Count */
+            word_count: number;
+            /** Criteria */
+            criteria: components["schemas"]["WritingCriterion"][];
         };
     };
     responses: never;
@@ -777,6 +934,7 @@ export interface operations {
         parameters: {
             query?: {
                 skill?: components["schemas"]["Skill"] | null;
+                module?: components["schemas"]["Module"] | null;
                 limit?: number;
                 offset?: number;
             };
@@ -1021,6 +1179,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_result: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResult"];
                 };
             };
             /** @description Validation Error */

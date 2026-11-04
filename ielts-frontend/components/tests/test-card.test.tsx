@@ -9,7 +9,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 function renderCard(skill: Skill) {
   renderWithProviders(
-    <TestCard test={{ id: "t", skill, title: `A ${skill} test`, exam_time_limit_minutes: 60 }} />,
+    <TestCard test={{ id: "t", skill, title: `A ${skill} test`, exam_time_limit_minutes: 60, module: null }} />,
   );
 }
 

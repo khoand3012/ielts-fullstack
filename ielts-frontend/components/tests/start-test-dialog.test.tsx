@@ -17,6 +17,7 @@ const reading: TestSummary = {
   skill: "reading",
   title: "Practice Test 1 — Academic Reading",
   exam_time_limit_minutes: 60,
+  module: "academic",
 };
 
 function renderDialog() {

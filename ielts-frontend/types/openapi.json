@@ -393,6 +393,22 @@
       }
      },
      {
+      "name": "module",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/Module"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Module"
+      }
+     },
+     {
       "name": "limit",
       "in": "query",
       "required": false,
@@ -802,6 +818,54 @@
      }
     }
    }
+  },
+  "/sessions/{session_id}/result": {
+   "get": {
+    "tags": [
+     "sessions"
+    ],
+    "summary": "Get Session Result",
+    "operationId": "get_session_result",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Session Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionResult"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
@@ -869,6 +933,18 @@
     ],
     "title": "AnswersResponse"
    },
+   "Criterion": {
+    "type": "string",
+    "enum": [
+     "task_achievement",
+     "task_response",
+     "coherence_cohesion",
+     "lexical_resource",
+     "grammatical_range_accuracy"
+    ],
+    "title": "Criterion",
+    "description": "IELTS Writing criteria; Task 1 is judged on Task Achievement, Task 2 on Task Response."
+   },
    "GradingMethod": {
     "type": "string",
     "enum": [
@@ -909,6 +985,15 @@
      "password"
     ],
     "title": "LoginRequest"
+   },
+   "Module": {
+    "type": "string",
+    "enum": [
+     "academic",
+     "general_training"
+    ],
+    "title": "Module",
+    "description": "Which Reading test a version is: it picks the raw-mark band table."
    },
    "Plan": {
     "type": "string",
@@ -951,6 +1036,88 @@
      "password"
     ],
     "title": "RegisterRequest"
+   },
+   "ResultQuestion": {
+    "properties": {
+     "number": {
+      "type": "integer",
+      "title": "Number"
+     },
+     "numbers": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array",
+      "title": "Numbers"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "text",
+       "single_choice",
+       "choice"
+      ],
+      "title": "Kind"
+     },
+     "answer": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Answer"
+     },
+     "accepted": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Accepted"
+     },
+     "correct_choices": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Correct Choices"
+     },
+     "marks": {
+      "type": "integer",
+      "title": "Marks"
+     },
+     "max_marks": {
+      "type": "integer",
+      "title": "Max Marks"
+     }
+    },
+    "type": "object",
+    "required": [
+     "number",
+     "numbers",
+     "kind",
+     "answer",
+     "accepted",
+     "correct_choices",
+     "marks",
+     "max_marks"
+    ],
+    "title": "ResultQuestion"
    },
    "Role": {
     "type": "string",
@@ -1044,6 +1211,38 @@
        }
       ]
      },
+     "module": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Module"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "raw_score": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Raw Score"
+     },
+     "band": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Band"
+     },
      "server_time": {
       "type": "string",
       "format": "date-time",
@@ -1075,6 +1274,9 @@
      "submit_reason",
      "request_manual_grading",
      "grading_method",
+     "module",
+     "raw_score",
+     "band",
      "server_time",
      "content",
      "answers"
@@ -1193,6 +1395,38 @@
        }
       ]
      },
+     "module": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Module"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "raw_score": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Raw Score"
+     },
+     "band": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Band"
+     },
      "server_time": {
       "type": "string",
       "format": "date-time",
@@ -1214,9 +1448,184 @@
      "submit_reason",
      "request_manual_grading",
      "grading_method",
+     "module",
+     "raw_score",
+     "band",
      "server_time"
     ],
     "title": "SessionRead"
+   },
+   "SessionResult": {
+    "properties": {
+     "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Session Id"
+     },
+     "test_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Test Id"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "skill": {
+      "$ref": "#/components/schemas/Skill"
+     },
+     "module": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Module"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "mode": {
+      "$ref": "#/components/schemas/SessionMode"
+     },
+     "submit_reason": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SubmitReason"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "grading_method": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/GradingMethod"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Started At"
+     },
+     "submitted_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Submitted At"
+     },
+     "time_spent_seconds": {
+      "type": "integer",
+      "title": "Time Spent Seconds"
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "graded",
+       "being_graded"
+      ],
+      "title": "Status"
+     },
+     "raw_score": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Raw Score"
+     },
+     "max_score": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Score"
+     },
+     "band": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Band"
+     },
+     "answered": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Answered"
+     },
+     "questions": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/ResultQuestion"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Questions"
+     },
+     "writing": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/WritingResult"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "session_id",
+     "test_id",
+     "title",
+     "skill",
+     "module",
+     "mode",
+     "submit_reason",
+     "grading_method",
+     "started_at",
+     "submitted_at",
+     "time_spent_seconds",
+     "status",
+     "raw_score",
+     "max_score",
+     "band",
+     "answered",
+     "questions"
+    ],
+    "title": "SessionResult"
    },
    "SessionStartRequest": {
     "properties": {
@@ -1313,6 +1722,16 @@
      "exam_time_limit_minutes": {
       "type": "integer",
       "title": "Exam Time Limit Minutes"
+     },
+     "module": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Module"
+       },
+       {
+        "type": "null"
+       }
+      ]
      }
     },
     "type": "object",
@@ -1320,7 +1739,8 @@
      "id",
      "skill",
      "title",
-     "exam_time_limit_minutes"
+     "exam_time_limit_minutes",
+     "module"
     ],
     "title": "TestSummary"
    },
@@ -1470,6 +1890,135 @@
      "type"
     ],
     "title": "ValidationError"
+   },
+   "WritingComment": {
+    "properties": {
+     "comment": {
+      "type": "string",
+      "title": "Comment",
+      "description": "What is right or wrong and why; plain text \u2014 render as text, never HTML or Markdown"
+     },
+     "quote": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Quote",
+      "description": "The student's own words, exactly; plain text \u2014 render as text, never HTML or Markdown"
+     },
+     "suggestion": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Suggestion",
+      "description": "A better version of the quote; plain text \u2014 render as text, never HTML or Markdown"
+     }
+    },
+    "type": "object",
+    "required": [
+     "comment",
+     "quote",
+     "suggestion"
+    ],
+    "title": "WritingComment"
+   },
+   "WritingCriterion": {
+    "properties": {
+     "criterion": {
+      "$ref": "#/components/schemas/Criterion"
+     },
+     "band": {
+      "type": "number",
+      "title": "Band"
+     },
+     "comments": {
+      "items": {
+       "$ref": "#/components/schemas/WritingComment"
+      },
+      "type": "array",
+      "title": "Comments"
+     }
+    },
+    "type": "object",
+    "required": [
+     "criterion",
+     "band",
+     "comments"
+    ],
+    "title": "WritingCriterion"
+   },
+   "WritingResult": {
+    "properties": {
+     "tasks": {
+      "items": {
+       "$ref": "#/components/schemas/WritingTask"
+      },
+      "type": "array",
+      "title": "Tasks"
+     },
+     "focus": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Focus",
+      "description": "The changes most likely to lift the band, most important first; plain text \u2014 render as text, never HTML or Markdown"
+     }
+    },
+    "type": "object",
+    "required": [
+     "tasks",
+     "focus"
+    ],
+    "title": "WritingResult",
+    "description": "The AI's feedback on a Writing session, as stored on the assessment and served."
+   },
+   "WritingTask": {
+    "properties": {
+     "number": {
+      "type": "integer",
+      "title": "Number"
+     },
+     "band": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Band"
+     },
+     "word_count": {
+      "type": "integer",
+      "title": "Word Count"
+     },
+     "criteria": {
+      "items": {
+       "$ref": "#/components/schemas/WritingCriterion"
+      },
+      "type": "array",
+      "title": "Criteria"
+     }
+    },
+    "type": "object",
+    "required": [
+     "number",
+     "band",
+     "word_count",
+     "criteria"
+    ],
+    "title": "WritingTask"
    }
   },
   "securitySchemes": {
