@@ -36,9 +36,15 @@ function StatusCell({ session }: { session: SessionRead }) {
     );
   }
   return (
-    <Link href={`/sessions/${session.id}`} className="underline-offset-4 hover:underline">
-      {session.submit_reason === "timeout" ? "Time's up" : "Submitted"}
-    </Link>
+    <div className="grid gap-1">
+      <span>{session.submit_reason === "timeout" ? "Time's up" : "Submitted"}</span>
+      <Link
+        href={`/sessions/${session.id}/result`}
+        className="font-medium underline underline-offset-4"
+      >
+        View result
+      </Link>
+    </div>
   );
 }
 

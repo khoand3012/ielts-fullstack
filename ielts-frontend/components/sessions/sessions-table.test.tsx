@@ -28,7 +28,7 @@ test("an exam in progress shows its deadline", () => {
   expect(due.querySelector("time")).toHaveAttribute("dateTime", "2026-10-24T11:00:00Z");
 });
 
-test("a timed-out session says Time's up and links to its page", () => {
+test("a timed-out session says Time's up and links to its result", () => {
   render(
     <SessionsTable
       items={[
@@ -44,8 +44,11 @@ test("a timed-out session says Time's up and links to its page", () => {
       pageSize={20}
     />,
   );
-  const link = screen.getByRole("link", { name: "Time's up" });
-  expect(link).toHaveAttribute("href", "/sessions/s-8");
+  expect(screen.getByText("Time's up")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "View result" })).toHaveAttribute(
+    "href",
+    "/sessions/s-8/result",
+  );
 });
 
 test("on the last page there is no Next link and Previous goes back one page", () => {

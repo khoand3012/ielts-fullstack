@@ -187,8 +187,9 @@ test("a submitted session opens straight to the submitted view", async () => {
   backend([submitted({ submit_reason: "timeout" })]);
   renderWithProviders(<SessionScreen sessionId="s-1" />);
   expect(await screen.findByRole("heading", { name: "Time's up — submitted" })).toBeInTheDocument();
-  expect(screen.getByText(/Results aren't available yet\./)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "View result" })).toHaveAttribute("href", "/sessions/s-1/result");
   expect(screen.getByRole("link", { name: "My sessions" })).toHaveAttribute("href", "/sessions");
+  expect(router.replace).toHaveBeenCalledWith("/sessions/s-1/result");
 });
 
 test("a writing session shows that the test type isn't available yet", async () => {
