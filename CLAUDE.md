@@ -1,13 +1,15 @@
 # IELTS Practice — Workspace
 
-This folder holds two **independent git repos** that together make one product. Launch Claude Code from here to work on both at once.
+This is a **monorepo** (`khoand3012/ielts-fullstack`) holding the two projects that together make one product. Launch Claude Code from here to work on both at once.
 
 | Folder | Stack | Role |
 |---|---|---|
 | `ielts-backend/` | Python 3.11, FastAPI, SQLAlchemy 2 async, Alembic, Postgres, `uv` | REST API, grading, sessions, auth |
 | `ielts-frontend/` | Next.js 15 App Router, TypeScript strict, Tailwind v4, shadcn/ui, TanStack Query | Student/teacher web UI; proxies to the backend |
 
-**This root is not a git repo.** Commit inside `ielts-backend/` and `ielts-frontend/` separately, never at the root.
+**One git repo at this root.** Do not run `git init` in the subfolders. Commit from the root; scope commits to one project where you can (conventional prefix, e.g. `feat(backend): …`, `fix(frontend): …`). A change that crosses the API seam (backend schema + regenerated `types/`) should land in the same commit or PR.
+
+**CI** lives in the root `.github/workflows/`: `backend.yml` and `frontend.yml`, each triggered only by changes under its own folder (path filters) and run with that folder as the working directory. GitHub ignores any `.github/` inside a subfolder, so never add workflows there. Deploy configs must set the project root (frontend → `ielts-frontend`, backend → `ielts-backend`).
 
 ## Read first
 

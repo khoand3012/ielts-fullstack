@@ -1,9 +1,19 @@
-name: CI
+name: Backend CI
 
 on:
   push:
     branches: [main, master]
+    paths:
+      - "ielts-backend/**"
+      - ".github/workflows/backend.yml"
   pull_request:
+    paths:
+      - "ielts-backend/**"
+      - ".github/workflows/backend.yml"
+
+defaults:
+  run:
+    working-directory: ielts-backend
 
 jobs:
   check:
@@ -15,6 +25,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: ielts-backend/uv.lock
 
       - name: Set up Python
         run: uv python install 3.11
