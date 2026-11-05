@@ -5,8 +5,16 @@ from typing import Any
 
 import pytest
 
-from core.ai.output import TASK_CRITERIA, OutputError, check_quotes, parse_output
-from core.models import Criterion
+from core.ai.output import (
+    TASK_CRITERIA,
+    ModelComment,
+    ModelCriterion,
+    ModelTask,
+    OutputError,
+    check_quotes,
+    parse_output,
+)
+from core.models import CommentKind, Criterion
 from tests.ai_helpers import completion, model_output
 
 
@@ -31,7 +39,7 @@ def _set_band(band: float) -> Callable[[dict[str, Any]], None]:
 def _set_comments(n: int) -> Callable[[dict[str, Any]], None]:
     def change(o: dict[str, Any]) -> None:
         o["task2"]["criteria"][0]["comments"] = [
-            {"comment": "c", "quote": None, "suggestion": None}
+            {"kind": "improvement", "comment": "c", "quote": None, "suggestion": None}
         ] * n
 
     return change
@@ -43,6 +51,14 @@ def _no_focus(o: dict[str, Any]) -> None:
 
 def _long_comment(o: dict[str, Any]) -> None:
     o["task2"]["criteria"][0]["comments"][0]["comment"] = "x" * 401
+
+
+def _missing_kind(o: dict[str, Any]) -> None:
+    del o["task2"]["criteria"][0]["comments"][0]["kind"]
+
+
+def _bad_kind(o: dict[str, Any]) -> None:
+    o["task2"]["criteria"][0]["comments"][0]["kind"] = "praise"
 
 
 def _wrong_criterion(o: dict[str, Any]) -> None:
@@ -59,6 +75,8 @@ def _wrong_criterion(o: dict[str, Any]) -> None:
         _no_focus,
         _long_comment,
         _wrong_criterion,
+        _missing_kind,
+        _bad_kind,
     ],
 )
 def test_parse_output_rejects(change: Callable[[dict[str, Any]], None]) -> None:
@@ -106,3 +124,52 @@ def test_quote_check() -> None:
 def test_quote_check_with_diacritics() -> None:
     kept = _comments("Tôi sống ở Việt Nam từ nhỏ.", "việt nam")
     assert all(q == "việt nam" for _, q, _ in kept)
+
+
+def test_parse_output_keeps_kind() -> None:
+    output = model_output()
+    output["task2"]["criteria"][1]["comments"] = [
+        {"kind": "strength", "comment": "Good linking.", "quote": "However", "suggestion": None}
+    ]
+    parsed = parse_output(completion(output), {1, 2})
+    assert parsed.task2 is not None
+    comment = next(
+        c for c in parsed.task2.criteria if c.criterion == Criterion.COHERENCE_COHESION
+    ).comments[0]
+    assert comment.kind == CommentKind.STRENGTH
+    assert comment.suggestion is None
+
+
+def test_parse_output_strength_drops_suggestion() -> None:
+    output = model_output()
+    output["task2"]["criteria"][0]["comments"] = [
+        {"kind": "strength", "comment": "Nice.", "quote": "x", "suggestion": "y"}
+    ]
+    parsed = parse_output(completion(output), {1, 2})
+    assert parsed.task2 is not None
+    c = parsed.task2.criteria[0].comments[0]
+    assert (c.kind, c.quote, c.suggestion) == (CommentKind.STRENGTH, "x", None)
+
+
+def test_strength_suggestion_dropped_on_init() -> None:
+    strength = ModelComment(kind=CommentKind.STRENGTH, comment="x", quote="q", suggestion="y")
+    improvement = ModelComment(kind=CommentKind.IMPROVEMENT, comment="x", quote="q", suggestion="y")
+    assert strength.suggestion is None
+    assert improvement.suggestion == "y"
+
+
+def test_quote_check_keeps_kind() -> None:
+    # A strength whose quote isn't in the essay loses the quote but stays a strength.
+    comment = ModelComment(
+        kind=CommentKind.STRENGTH, comment="Good.", quote="not in essay", suggestion=None
+    )
+    task = ModelTask(
+        criteria=[
+            ModelCriterion(
+                criterion=Criterion.TASK_RESPONSE, band=Decimal("6.0"), comments=[comment]
+            )
+        ]
+    )
+    checked = check_quotes(task, "essay text").criteria[0].comments[0]
+    assert checked.kind == CommentKind.STRENGTH
+    assert checked.quote is None

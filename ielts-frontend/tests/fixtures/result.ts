@@ -77,8 +77,13 @@ export function makeWritingResult(overrides: Partial<SessionResult> = {}): Sessi
               criterion: "task_achievement",
               band: 6,
               comments: [
-                { comment: "Covers the key trends.", quote: "the graph go up", suggestion: "the graph rises" },
-                { comment: "No overview given.", quote: null, suggestion: null },
+                {
+                  comment: "Covers the key trends.",
+                  quote: "the graph go up",
+                  suggestion: "the graph rises",
+                  kind: "improvement",
+                },
+                { comment: "No overview given.", quote: null, suggestion: null, kind: "improvement" },
               ],
             },
             { criterion: "lexical_resource", band: 6.5, comments: [] },
@@ -90,6 +95,7 @@ export function makeWritingResult(overrides: Partial<SessionResult> = {}): Sessi
                   comment: "Use the past tense for past years.",
                   quote: "The graph go up",
                   suggestion: "The graph went up",
+                  kind: "improvement",
                 },
               ],
             },

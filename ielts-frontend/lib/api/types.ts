@@ -18,3 +18,4 @@ export type ResultSection = Schemas["ResultSection"];
 export type WritingCriterion = Schemas["WritingCriterion"];
 export type WritingComment = Schemas["WritingComment"];
 export type Criterion = Schemas["Criterion"];
+export type CommentKind = Schemas["CommentKind"];

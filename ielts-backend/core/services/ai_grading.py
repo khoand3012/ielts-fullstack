@@ -245,7 +245,9 @@ def _graded_task(number: int, task: ModelTask, words: int) -> tuple[WritingTask,
             criterion=c.criterion,
             band=c.band,
             comments=[
-                WritingComment(comment=x.comment, quote=x.quote, suggestion=x.suggestion)
+                WritingComment(
+                    comment=x.comment, quote=x.quote, suggestion=x.suggestion, kind=x.kind
+                )
                 for x in c.comments
             ],
         )

@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import type { WritingTask } from "@/lib/api/types";
-import { CRITERION_LABELS, CRITERION_TONE, TONE_CLASSES } from "@/lib/result/format";
+import { CRITERION_LABELS, CRITERION_TONE, STRENGTH_MARK, TONE_CLASSES } from "@/lib/result/format";
 import {
   type FeedbackComment,
   type PlacedEssay,
@@ -25,6 +25,14 @@ function CriterionChip({ comment }: { comment: FeedbackComment }) {
   );
 }
 
+function StrengthTag() {
+  return (
+    <span className="text-xs font-medium text-foreground">
+      <span aria-hidden="true">✓ </span>Strength
+    </span>
+  );
+}
+
 /** `range` is the comment's own quote, which may differ from the highlight it is attached to. */
 function Fix({
   comment,
@@ -39,19 +47,49 @@ function Fix({
   const before = text.slice(s.start, r.start);
   const after = text.slice(r.end, s.end);
   const suggestion = comment.suggestion?.trim() ? comment.suggestion : null;
+  if (comment.kind === "strength") {
+    return (
+      <article className="grid gap-3">
+        <CriterionChip comment={comment} />
+        <div className="grid gap-1 rounded-lg bg-state-correct/10 p-3">
+          <p className="text-xs font-semibold tracking-wide text-foreground uppercase">
+            <span aria-hidden="true">✓ </span>What works
+          </p>
+          <p className="whitespace-pre-wrap">
+            {before}
+            <mark className={cn("rounded-sm px-0.5", STRENGTH_MARK)}>{text.slice(r.start, r.end)}</mark>
+            {after}
+          </p>
+        </div>
+        <p className="whitespace-pre-wrap">{comment.comment}</p>
+      </article>
+    );
+  }
   // Labels and text on the tints stay text-foreground: muted text drops below 4.5:1 there.
+  // Without a suggestion there is nothing to replace (often the comment is praise), so the
+  // words are marked in the criterion colour rather than struck out as a mistake.
   return (
     <article className="grid gap-3">
       <CriterionChip comment={comment} />
-      <div className="grid gap-1 rounded-lg bg-state-wrong/10 p-3">
+      <div className={cn("grid gap-1 rounded-lg p-3", suggestion ? "bg-state-wrong/10" : "bg-muted")}>
         <p className="text-xs font-semibold tracking-wide text-foreground uppercase">You wrote</p>
         <p className="whitespace-pre-wrap">
           {before}
-          <mark className="rounded-sm bg-state-wrong/25 px-0.5 text-foreground line-through decoration-state-wrong decoration-2">
+          <mark
+            className={cn(
+              "rounded-sm px-0.5 text-foreground",
+              suggestion
+                ? "bg-state-wrong/25 line-through decoration-state-wrong decoration-2"
+                : TONE_CLASSES[CRITERION_TONE[comment.criterion]].mark,
+            )}
+          >
             {text.slice(r.start, r.end)}
           </mark>
           {after}
         </p>
+        {!suggestion && comment.kind == null && (
+          <p className="text-xs text-foreground">No change suggested for these words.</p>
+        )}
       </div>
       {suggestion && (
         <div className="grid gap-1 rounded-lg bg-state-correct/10 p-3">
@@ -181,7 +219,7 @@ export function CoachPanel({
           <h3 id={headingId} ref={headingRef} tabIndex={-1} className="font-semibold outline-none">
             Task {task.number} feedback
           </h3>
-          {order.length > 0 && <p className="text-muted-foreground">Tap a highlight to see the fix</p>}
+          {order.length > 0 && <p className="text-muted-foreground">Tap a highlight to see the feedback</p>}
           {comments.length === 0 && <p className="text-muted-foreground">No comments to show.</p>}
           {groups.map((g) => (
             <div key={g.criterion} className="grid gap-2">
@@ -201,6 +239,7 @@ export function CoachPanel({
                       onClick={() => onSelect(c.id, "list")}
                       className="grid w-full gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                     >
+                      {c.kind === "strength" && <StrengthTag />}
                       <span className="whitespace-pre-wrap">{c.comment}</span>
                       {c.quote && (
                         <span className="whitespace-pre-wrap text-muted-foreground">“{c.quote}”</span>
@@ -220,6 +259,7 @@ export function CoachPanel({
                 {otherComments.map((c) => (
                   <li key={c.id} className="grid gap-1">
                     <CriterionChip comment={c} />
+                    {c.kind === "strength" && <StrengthTag />}
                     <p className="whitespace-pre-wrap">{c.comment}</p>
                     {c.quote && <p className="whitespace-pre-wrap text-muted-foreground">“{c.quote}”</p>}
                     {c.suggestion?.trim() ? (

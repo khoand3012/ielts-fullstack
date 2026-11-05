@@ -390,6 +390,56 @@ async def test_result_writing_stored_shape_unchanged(
     assert all("text" not in t for t in stored["tasks"])
 
 
+async def _stored_comments(body: dict[str, Any]) -> list[dict[str, Any]]:
+    return [c for t in body["writing"]["tasks"] for k in t["criteria"] for c in k["comments"]]
+
+
+async def test_result_serves_comment_kind(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
+) -> None:
+    _, fake = ai_installed
+    fake.responses = [completion(model_output())]
+    user, tok = await make_user()
+    ts = await writing_submitted(app_client, db_session, user, tok, BOTH)
+    stored = await db_session.scalar(
+        select(AIAssessment.result).where(AIAssessment.test_session_id == ts.id)
+    )
+    assert stored is not None
+    stored["tasks"][0]["criteria"][0]["comments"][0]["kind"] = "strength"
+    await db_session.execute(
+        update(AIAssessment).where(AIAssessment.test_session_id == ts.id).values(result=stored)
+    )
+    await db_session.commit()
+
+    body = await result(app_client, tok, ts)
+    comment = body["writing"]["tasks"][0]["criteria"][0]["comments"][0]
+    assert comment["kind"] == "strength"
+
+
+async def test_result_old_comment_without_kind(
+    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
+) -> None:
+    _, fake = ai_installed
+    fake.responses = [completion(model_output())]
+    user, tok = await make_user()
+    ts = await writing_submitted(app_client, db_session, user, tok, BOTH)
+    stored = await db_session.scalar(
+        select(AIAssessment.result).where(AIAssessment.test_session_id == ts.id)
+    )
+    assert stored is not None
+    for t in stored["tasks"]:
+        for k in t["criteria"]:
+            for c in k["comments"]:
+                del c["kind"]
+    await db_session.execute(
+        update(AIAssessment).where(AIAssessment.test_session_id == ts.id).values(result=stored)
+    )
+    await db_session.commit()
+
+    comments = await _stored_comments(await result(app_client, tok, ts))
+    assert comments and all(c["kind"] is None for c in comments)
+
+
 async def test_result_hides_internals(
     app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
 ) -> None:
@@ -406,7 +456,7 @@ async def test_result_hides_internals(
         "signals",
         "manipulation",
         "prompt_version",
-        "writing-academic-v1",
+        "writing-academic-v2",
         get_settings().ai_model,
         note,
     ):

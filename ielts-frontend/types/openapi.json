@@ -933,6 +933,15 @@
     ],
     "title": "AnswersResponse"
    },
+   "CommentKind": {
+    "type": "string",
+    "enum": [
+     "strength",
+     "improvement"
+    ],
+    "title": "CommentKind",
+    "description": "Whether a Writing feedback comment praises something or points to a way to improve."
+   },
    "Criterion": {
     "type": "string",
     "enum": [
@@ -1963,6 +1972,17 @@
       ],
       "title": "Suggestion",
       "description": "A better version of the quote; plain text \u2014 render as text, never HTML or Markdown"
+     },
+     "kind": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/CommentKind"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "strength or improvement; null when graded before prompt v2"
      }
     },
     "type": "object",

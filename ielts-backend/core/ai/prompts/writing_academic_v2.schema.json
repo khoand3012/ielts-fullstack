@@ -1,0 +1,241 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task1",
+    "task2",
+    "focus",
+    "manipulation_attempt",
+    "manipulation_evidence"
+  ],
+  "properties": {
+    "task1": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "criteria"
+      ],
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "criterion",
+              "band",
+              "comments"
+            ],
+            "properties": {
+              "criterion": {
+                "type": "string",
+                "enum": [
+                  "task_achievement",
+                  "coherence_cohesion",
+                  "lexical_resource",
+                  "grammatical_range_accuracy"
+                ]
+              },
+              "band": {
+                "type": "number",
+                "enum": [
+                  0.0,
+                  0.5,
+                  1.0,
+                  1.5,
+                  2.0,
+                  2.5,
+                  3.0,
+                  3.5,
+                  4.0,
+                  4.5,
+                  5.0,
+                  5.5,
+                  6.0,
+                  6.5,
+                  7.0,
+                  7.5,
+                  8.0,
+                  8.5,
+                  9.0
+                ]
+              },
+              "comments": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "comment",
+                    "quote",
+                    "suggestion"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "strength",
+                        "improvement"
+                      ]
+                    },
+                    "comment": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    },
+                    "quote": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 300
+                    },
+                    "suggestion": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 300
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "task2": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "criteria"
+      ],
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "criterion",
+              "band",
+              "comments"
+            ],
+            "properties": {
+              "criterion": {
+                "type": "string",
+                "enum": [
+                  "task_response",
+                  "coherence_cohesion",
+                  "lexical_resource",
+                  "grammatical_range_accuracy"
+                ]
+              },
+              "band": {
+                "type": "number",
+                "enum": [
+                  0.0,
+                  0.5,
+                  1.0,
+                  1.5,
+                  2.0,
+                  2.5,
+                  3.0,
+                  3.5,
+                  4.0,
+                  4.5,
+                  5.0,
+                  5.5,
+                  6.0,
+                  6.5,
+                  7.0,
+                  7.5,
+                  8.0,
+                  8.5,
+                  9.0
+                ]
+              },
+              "comments": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "comment",
+                    "quote",
+                    "suggestion"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "strength",
+                        "improvement"
+                      ]
+                    },
+                    "comment": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    },
+                    "quote": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 300
+                    },
+                    "suggestion": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 300
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "focus": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      }
+    },
+    "manipulation_attempt": {
+      "type": "boolean"
+    },
+    "manipulation_evidence": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 300
+    }
+  }
+}

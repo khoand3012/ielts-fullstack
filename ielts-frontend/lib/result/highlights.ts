@@ -1,4 +1,4 @@
-import type { Criterion } from "@/lib/api/types";
+import type { CommentKind, Criterion } from "@/lib/api/types";
 
 export type FeedbackComment = {
   id: string;
@@ -6,6 +6,8 @@ export type FeedbackComment = {
   comment: string;
   quote: string | null;
   suggestion: string | null;
+  /** null: graded before the API reported a kind; renders as an improvement. */
+  kind: CommentKind | null;
 };
 
 export type Highlight = { start: number; end: number; commentIds: string[] };

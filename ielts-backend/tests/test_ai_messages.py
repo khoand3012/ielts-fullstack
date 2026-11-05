@@ -1,6 +1,8 @@
 import re
+from pathlib import Path
 from typing import Any
 
+import core.ai.prompts
 from core.ai.injection import clean_essay, word_count
 from core.ai.messages import TaskInput, build_request
 from core.ai.output import ModelOutput
@@ -42,7 +44,7 @@ def _marker_id(text: str) -> str:
 
 def test_system_prompt_is_stable() -> None:
     prompt = system_prompt()
-    assert PROMPT_VERSION == "writing-academic-v1"
+    assert PROMPT_VERSION == "writing-academic-v2"
     assert not re.search(r"\d{4}-\d{2}-\d{2}", prompt)
     assert get_settings().ai_model not in prompt
     a = _request([_task(1, image=PNG), _task(2)])
@@ -144,3 +146,27 @@ def test_settings_defaults_fit_a_reasoning_model() -> None:
     settings = Settings(_env_file=None)  # pyright: ignore[reportCallIssue]
     assert settings.ai_max_output_tokens == 12000
     assert settings.ai_provider_ignore == ["venice"]
+
+
+PROMPTS = Path(core.ai.prompts.__file__).parent
+
+
+def test_v2_schema_requires_kind() -> None:
+    item = response_schema()["properties"]["task1"]["properties"]["criteria"]["items"][
+        "properties"
+    ]["comments"]["items"]
+    assert "kind" in item["required"]
+    assert item["properties"]["kind"]["enum"] == ["strength", "improvement"]
+
+
+def test_v1_files_unchanged_and_v2_differs_only_in_comments() -> None:
+    v1 = (PROMPTS / "writing_academic_v1.md").read_text(encoding="utf-8")
+    v2 = system_prompt()
+    assert "strength" not in v1
+    assert "`kind`" in v2
+
+    # Band descriptors are byte-identical: from "# Task 1 (Academic)" up to "# What to return".
+    def section(s: str) -> str:
+        return s[s.index("# Task 1 (Academic)") : s.index("# What to return")]
+
+    assert section(v1) == section(v2)

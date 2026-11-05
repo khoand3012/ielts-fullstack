@@ -3,6 +3,7 @@ from core.models.base import Base
 from core.models.daily_usage import DailyUsage
 from core.models.enums import (
     AssessmentStatus,
+    CommentKind,
     Criterion,
     GradingMethod,
     Module,
@@ -23,6 +24,7 @@ __all__ = [
     "Answer",
     "AssessmentStatus",
     "Base",
+    "CommentKind",
     "Criterion",
     "DailyUsage",
     "GradingMethod",
