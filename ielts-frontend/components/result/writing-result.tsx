@@ -6,71 +6,47 @@ import type { Criterion, WritingResult, WritingTask } from "@/lib/api/types";
 import { ContentError, parseContent } from "@/lib/content/schema";
 import { useSessionQuery } from "@/lib/session/queries";
 import { formatBand } from "@/lib/result/format";
-import { type FeedbackComment, placeComments } from "@/lib/result/highlights";
+import { writingFeedback } from "@/lib/result/writing-feedback";
 import { cn } from "@/lib/utils";
 import { CoachPanel } from "./coach-panel";
 import { CriterionBars } from "./criterion-bars";
-import { HighlightedEssay, commentsOn, findHighlight } from "./highlighted-essay";
+import { HighlightedEssay } from "./highlighted-essay";
+
+const highlightSelector = (key: string) => `[data-highlight="${key}"]`;
 
 function TaskView({ task }: { task: WritingTask }) {
-  const comments = useMemo<FeedbackComment[]>(
-    () =>
-      task.criteria.flatMap((c) =>
-        c.comments.map((x, i) => ({
-          id: `${c.criterion}-${i}`,
-          criterion: c.criterion,
-          comment: x.comment,
-          quote: x.quote,
-          suggestion: x.suggestion,
-          kind: x.kind ?? null,
-        })),
-      ),
-    [task.criteria],
-  );
-  // Results saved before essay text was returned have no `text`.
-  const text = task.text ?? "";
-  const placed = useMemo(() => placeComments(text, comments), [text, comments]);
   const [filter, setFilter] = useState<Criterion | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const feedback = useMemo(() => writingFeedback(task, { filter, selectedKey }), [task, filter, selectedKey]);
   const rootRef = useRef<HTMLDivElement>(null);
   // Selector for the element that opened the panel; Previous/Next keep it.
   const openerRef = useRef<string | null>(null);
   // Where focus goes once the panel has closed: the opener, else the current highlight.
   const refocusRef = useRef<string[] | null>(null);
 
-  const highlightSelector = (commentId: string) => {
-    const key = findHighlight(placed, commentId)?.key;
-    return key ? `[data-highlight="${key}"]` : null;
-  };
-
-  const select = (commentId: string, origin: "essay" | "list" | "nav") => {
-    if (origin === "essay") openerRef.current = highlightSelector(commentId);
-    // The list unmounts while a comment is shown, so remember the item, not the element.
-    if (origin === "list") openerRef.current = `[data-comment-item="${commentId}"]`;
-    setSelectedId(commentId);
+  const open = (key: string, opener: string) => {
+    openerRef.current = opener;
+    setSelectedKey(key);
   };
 
   const close = useCallback(() => {
-    const current = selectedId ? findHighlight(placed, selectedId)?.key : undefined;
-    refocusRef.current = [openerRef.current, current ? `[data-highlight="${current}"]` : null].filter(
-      (s): s is string => s !== null,
+    refocusRef.current = [openerRef.current, selectedKey && highlightSelector(selectedKey)].filter(
+      (s): s is string => !!s,
     );
     openerRef.current = null;
-    setSelectedId(null);
-  }, [placed, selectedId]);
+    setSelectedKey(null);
+  }, [selectedKey]);
 
-  // Bring the selected comment's highlight into view: a list item or Previous/Next may point
+  // Bring the selected highlight into view: a list item or Previous/Next may point
   // off-screen, and on phones the bottom sheet covers the lower part of the essay.
   useEffect(() => {
-    if (selectedId === null) return;
-    const key = findHighlight(placed, selectedId)?.key;
-    if (!key) return;
-    rootRef.current?.querySelector(`[data-highlight="${key}"]`)?.scrollIntoView?.({ block: "center" });
-  }, [placed, selectedId]);
+    if (selectedKey === null) return;
+    rootRef.current?.querySelector(highlightSelector(selectedKey))?.scrollIntoView?.({ block: "center" });
+  }, [selectedKey]);
 
   useEffect(() => {
     const targets = refocusRef.current;
-    if (selectedId !== null || !targets) return;
+    if (selectedKey !== null || !targets) return;
     refocusRef.current = null;
     for (const target of targets) {
       const el = rootRef.current?.querySelector<HTMLElement>(target);
@@ -79,50 +55,37 @@ function TaskView({ task }: { task: WritingTask }) {
         return;
       }
     }
-  }, [selectedId]);
+  }, [selectedKey]);
 
   if (task.band === null) {
     return <p className="text-muted-foreground">Not graded: no answer</p>;
   }
 
-  const shownComments = filter ? comments.filter((c) => c.criterion === filter) : comments;
-  const order = placed.paragraphs.flatMap((p) =>
-    p.highlights.flatMap((h) => commentsOn(h, comments, filter).slice(0, 1).map((c) => c.id)),
-  );
-  const blank = text.trim() === "";
-
   return (
-    <div ref={rootRef} className={cn("grid gap-4", selectedId && "max-lg:pb-[60vh]")}>
+    <div ref={rootRef} className={cn("grid gap-4", feedback.selected && "max-lg:pb-[60vh]")}>
       <CriterionBars
         criteria={task.criteria}
         active={filter}
         onToggle={(c) => {
           setFilter((f) => (f === c ? null : c));
           openerRef.current = null;
-          setSelectedId(null);
+          setSelectedKey(null);
         }}
       />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
         <div className="min-w-0 rounded-xl border bg-card p-4 sm:p-6">
-          {blank ? (
+          {feedback.blank ? (
             <p className="text-muted-foreground">No answer</p>
           ) : (
-            <HighlightedEssay
-              placed={placed}
-              comments={comments}
-              filter={filter}
-              selectedId={selectedId}
-              onSelect={(id) => select(id, "essay")}
-            />
+            <HighlightedEssay paragraphs={feedback.paragraphs} onOpen={(key) => open(key, highlightSelector(key))} />
           )}
         </div>
         <CoachPanel
-          task={task}
-          placed={placed}
-          comments={shownComments}
-          selectedId={selectedId}
-          order={order}
-          onSelect={select}
+          taskNumber={task.number}
+          feedback={feedback}
+          // The list unmounts while a highlight is shown, so the opener is the item's selector.
+          onOpen={open}
+          onNavigate={setSelectedKey}
           onClose={close}
         />
       </div>
