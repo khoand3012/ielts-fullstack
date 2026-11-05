@@ -328,6 +328,11 @@ test("a placed comment without a suggestion shows no Better", async () => {
   expect(screen.getByText("You wrote")).toBeInTheDocument();
   expect(screen.getByText("Use the past tense for past years.")).toBeInTheDocument();
   expect(screen.queryByText("Better")).toBeNull();
+  // No suggestion means nothing to replace: the words are marked, not struck out as a mistake.
+  const panel = screen.getByRole("complementary", { name: "Highlight 2 of 2" });
+  const mark = within(panel).getByText("The graph go up", { selector: "mark" });
+  expect(mark).not.toHaveClass("line-through");
+  expect(within(panel).getByText("No change suggested for these words.")).toBeInTheDocument();
 });
 
 test("Escape closes the coach panel and returns focus to the highlight", async () => {

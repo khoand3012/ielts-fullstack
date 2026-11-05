@@ -40,18 +40,28 @@ function Fix({
   const after = text.slice(r.end, s.end);
   const suggestion = comment.suggestion?.trim() ? comment.suggestion : null;
   // Labels and text on the tints stay text-foreground: muted text drops below 4.5:1 there.
+  // Without a suggestion there is nothing to replace (often the comment is praise), so the
+  // words are marked in the criterion colour rather than struck out as a mistake.
   return (
     <article className="grid gap-3">
       <CriterionChip comment={comment} />
-      <div className="grid gap-1 rounded-lg bg-state-wrong/10 p-3">
+      <div className={cn("grid gap-1 rounded-lg p-3", suggestion ? "bg-state-wrong/10" : "bg-muted")}>
         <p className="text-xs font-semibold tracking-wide text-foreground uppercase">You wrote</p>
         <p className="whitespace-pre-wrap">
           {before}
-          <mark className="rounded-sm bg-state-wrong/25 px-0.5 text-foreground line-through decoration-state-wrong decoration-2">
+          <mark
+            className={cn(
+              "rounded-sm px-0.5 text-foreground",
+              suggestion
+                ? "bg-state-wrong/25 line-through decoration-state-wrong decoration-2"
+                : TONE_CLASSES[CRITERION_TONE[comment.criterion]].mark,
+            )}
+          >
             {text.slice(r.start, r.end)}
           </mark>
           {after}
         </p>
+        {!suggestion && <p className="text-xs text-foreground">No change suggested for these words.</p>}
       </div>
       {suggestion && (
         <div className="grid gap-1 rounded-lg bg-state-correct/10 p-3">
