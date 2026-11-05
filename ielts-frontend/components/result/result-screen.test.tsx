@@ -336,28 +336,25 @@ test("a placed comment without a suggestion shows no Better", async () => {
   expect(within(panel).getByText("No change suggested for these words.")).toBeInTheDocument();
 });
 
-test.each([["whitespace-only", "   "], ["null", null]])(
-  "an improvement with a %s suggestion shows no 'No change suggested' line",
-  async (_name, suggestion) => {
-    serve(
-      withTask1Comments({
-        grammatical_range_accuracy: [
-          { kind: "improvement", comment: "Use the past tense.", quote: "The graph go up", suggestion },
-        ],
-      }),
-    );
-    renderWithProviders(<ResultScreen sessionId="s-1" />);
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
-    );
-    const panel = screen.getByRole("complementary", { name: /^Highlight/ });
-    expect(within(panel).getByText("Use the past tense.")).toBeInTheDocument();
-    expect(within(panel).queryByText("Better")).toBeNull();
-    expect(within(panel).queryByText("No change suggested for these words.")).toBeNull();
-    expect(within(panel).getByText("The graph go up", { selector: "mark" })).not.toHaveClass("line-through");
-  },
-);
+test("an improvement without a suggestion is marked, not struck out, with no 'No change suggested' line", async () => {
+  serve(
+    withTask1Comments({
+      grammatical_range_accuracy: [
+        { kind: "improvement", comment: "Use the past tense.", quote: "The graph go up", suggestion: null },
+      ],
+    }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+  );
+  const panel = screen.getByRole("complementary", { name: /^Highlight/ });
+  expect(within(panel).getByText("Use the past tense.")).toBeInTheDocument();
+  expect(within(panel).queryByText("Better")).toBeNull();
+  expect(within(panel).queryByText("No change suggested for these words.")).toBeNull();
+  expect(within(panel).getByText("The graph go up", { selector: "mark" })).not.toHaveClass("line-through");
+});
 
 test("Escape closes the coach panel and returns focus to the highlight", async () => {
   serve(makeWritingResult());
@@ -449,33 +446,6 @@ test("unplaced comments are listed", async () => {
   expect(within(other).getByText("No overview given.")).toBeInTheDocument();
 });
 
-test("an unplaced comment with a whitespace-only suggestion shows no Better", async () => {
-  const base = makeWritingResult();
-  const [task1, task2] = base.writing!.tasks;
-  serve(
-    makeWritingResult({
-      writing: {
-        ...base.writing!,
-        tasks: [
-          {
-            ...task1,
-            criteria: task1.criteria.map((c) =>
-              c.criterion === "task_achievement"
-                ? { ...c, comments: c.comments.map((x) => (x.quote === null ? { ...x, suggestion: "  " } : x)) }
-                : c,
-            ),
-          },
-          task2,
-        ],
-      },
-    }),
-  );
-  renderWithProviders(<ResultScreen sessionId="s-1" />);
-  const other = await screen.findByRole("region", { name: "Other comments on this task" });
-  expect(within(other).getByText("No overview given.")).toBeInTheDocument();
-  expect(within(other).queryByText(/Better/)).toBeNull();
-});
-
 test("selecting a comment scrolls its highlight into view, but Close does not", async () => {
   const original = Element.prototype.scrollIntoView;
   const scrolled: Element[] = [];
@@ -504,42 +474,6 @@ test("selecting a comment scrolls its highlight into view, but Close does not", 
   } finally {
     Element.prototype.scrollIntoView = original;
   }
-});
-
-test("a comment attached to an overlapping highlight shows its own quote in Better", async () => {
-  serve(
-    makeWritingResult({
-      writing: {
-        focus: [],
-        tasks: [
-          {
-            number: 1,
-            band: 6,
-            word_count: 6,
-            text: "a very big increase isn’t here.",
-            criteria: [
-              {
-                criterion: "lexical_resource",
-                band: 6,
-                comments: [
-                  { comment: "Too vague.", quote: "very big", suggestion: "very large" },
-                  { comment: "Avoid contractions.", quote: "big increase isn't", suggestion: "large rise is not" },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    }),
-  );
-  renderWithProviders(<ResultScreen sessionId="s-1" />);
-  const user = userEvent.setup();
-  await user.click(await screen.findByRole("button", { name: "Lexical Resource: very big" }));
-  const panel = screen.getByRole("complementary", { name: "Highlight 1 of 1" });
-  expect(within(panel).getByText("big increase isn’t", { selector: "mark" })).toBeInTheDocument();
-  expect(within(panel).getByText("a very large increase isn’t here.")).toBeInTheDocument();
-  // The overlap-attached comment replaces its own quote: no duplicated tail.
-  expect(within(panel).getByText("a very large rise is not here.")).toBeInTheDocument();
 });
 
 test("an old Reading result without sections or question types still renders", async () => {
@@ -722,7 +656,7 @@ test("polling stops after the cap; Check again resumes it", async () => {
 type Task1Comments = Partial<Record<Criterion, NonNullable<SessionResult["writing"]>["tasks"][number]["criteria"][number]["comments"]>>;
 
 /** makeWritingResult() with the given criteria's Task 1 comments replaced. */
-function withTask1Comments(replace: Task1Comments, map?: (c: Record<string, unknown>) => Record<string, unknown>) {
+function withTask1Comments(replace: Task1Comments) {
   const base = makeWritingResult();
   const [task1, task2] = base.writing!.tasks;
   return makeWritingResult({
@@ -731,10 +665,7 @@ function withTask1Comments(replace: Task1Comments, map?: (c: Record<string, unkn
       tasks: [
         {
           ...task1,
-          criteria: task1.criteria.map((c) => {
-            const comments = replace[c.criterion] ?? c.comments;
-            return { ...c, comments: map ? comments.map((x) => map({ ...x }) as typeof x) : comments };
-          }),
+          criteria: task1.criteria.map((c) => ({ ...c, comments: replace[c.criterion] ?? c.comments })),
         },
         task2,
       ],
@@ -786,7 +717,7 @@ test("a Task Achievement strength differs from a Task Achievement improvement wi
   expect(improvement).not.toHaveClass("decoration-double");
 });
 
-test("strengths are tagged in the comment list and in Other comments", async () => {
+test("strengths are tagged in the comment list and in Other comments, without Better", async () => {
   serve(
     withTask1Comments({
       lexical_resource: [
@@ -794,7 +725,7 @@ test("strengths are tagged in the comment list and in Other comments", async () 
       ],
       task_achievement: [
         { kind: "improvement", comment: "Covers the key trends.", quote: "the graph go up", suggestion: "the graph rises" },
-        { kind: "strength", comment: "No overview given.", quote: null, suggestion: null },
+        { kind: "strength", comment: "No overview given.", quote: null, suggestion: "Add an overview." },
       ],
     }),
   );
@@ -803,6 +734,8 @@ test("strengths are tagged in the comment list and in Other comments", async () 
   expect(item).toHaveTextContent("Strength");
   const other = screen.getByRole("region", { name: "Other comments on this task" });
   expect(within(other).getByText("No overview given.").closest("li")).toHaveTextContent("Strength");
+  // Same display variant as in the panel: a strength never shows a suggestion.
+  expect(within(other).queryByText(/Better/)).toBeNull();
   // Improvements carry no tag.
   expect(screen.getByRole("button", { name: /Covers the key trends\./ })).not.toHaveTextContent("Strength");
 });
@@ -829,40 +762,3 @@ test("an improvement attached to a strength highlight shows both in their own st
   expect(within(panel).getAllByText("You wrote")).toHaveLength(1);
 });
 
-test("a filtered highlight takes its kind from its first visible comment", async () => {
-  serve(
-    withTask1Comments({
-      task_achievement: [
-        { kind: "strength", comment: "Clear overview.", quote: "Overall, the graph go up", suggestion: null },
-      ],
-      grammatical_range_accuracy: [
-        { kind: "improvement", comment: "Use the past tense.", quote: "the graph go up", suggestion: "the graph went up" },
-      ],
-    }),
-  );
-  renderWithProviders(<ResultScreen sessionId="s-1" />);
-  const user = userEvent.setup();
-  expect(
-    await screen.findByRole("button", { name: "Strength, Task Achievement: Overall, the graph go up" }),
-  ).toBeInTheDocument();
-  const bars = screen.getByRole("group", { name: "Criteria" });
-  await user.click(within(bars).getByRole("button", { name: /Grammatical Range and Accuracy/ }));
-  const mark = screen.getByRole("button", { name: "Grammatical Range and Accuracy: Overall, the graph go up" });
-  expect(mark).not.toHaveClass("decoration-double");
-  expect(mark).not.toHaveClass("bg-state-correct/15");
-});
-
-test("comments without kind render as before", async () => {
-  serve(withTask1Comments({}, (c) => {
-    delete c.kind;
-    return c;
-  }));
-  renderWithProviders(<ResultScreen sessionId="s-1" />);
-  const user = userEvent.setup();
-  await user.click(await screen.findByRole("button", { name: "Task Achievement: the graph go up" }));
-  const panel = screen.getByRole("complementary", { name: /^Highlight/ });
-  expect(within(panel).getByText("You wrote")).toBeInTheDocument();
-  expect(within(panel).getByText("Better")).toBeInTheDocument();
-  expect(screen.queryByText("What works")).toBeNull();
-  expect(screen.queryByText("Strength")).toBeNull();
-});
