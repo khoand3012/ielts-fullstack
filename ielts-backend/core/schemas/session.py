@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, PlainSerializer
 
 from core.models import (
+    CommentKind,
     Criterion,
     GradingMethod,
     Module,
@@ -102,6 +103,9 @@ class WritingComment(BaseModel):
     comment: str = Field(description=f"What is right or wrong and why; {_PLAIN_TEXT}")
     quote: str | None = Field(description=f"The student's own words, exactly; {_PLAIN_TEXT}")
     suggestion: str | None = Field(description=f"A better version of the quote; {_PLAIN_TEXT}")
+    kind: CommentKind | None = Field(
+        default=None, description="strength or improvement; null when graded before prompt v2"
+    )
 
 
 class WritingCriterion(BaseModel):
