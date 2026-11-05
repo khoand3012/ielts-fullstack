@@ -1,5 +1,5 @@
 import type { Criterion } from "@/lib/api/types";
-import { CRITERION_LABELS, CRITERION_TONE, TONE_CLASSES } from "@/lib/result/format";
+import { CRITERION_LABELS, CRITERION_TONE, STRENGTH_MARK, TONE_CLASSES } from "@/lib/result/format";
 import type {
   EssayParagraph,
   FeedbackComment,
@@ -57,6 +57,8 @@ export function HighlightedEssay({
           const key = `${p}-${i}`;
           const criterion = shown[0].criterion;
           const slice = paragraph.text.slice(h.start, h.end);
+          // The highlight takes the kind of its first comment, even if the filter hides it.
+          const strength = comments.find((x) => x.id === h.commentIds[0])?.kind === "strength";
           if (h.start > at) parts.push(paragraph.text.slice(at, h.start));
           const select = () => onSelect(shown[0].id);
           parts.push(
@@ -69,7 +71,7 @@ export function HighlightedEssay({
               tabIndex={0}
               data-highlight={key}
               aria-pressed={key === selectedKey}
-              aria-label={`${CRITERION_LABELS[criterion]}: ${slice}`}
+              aria-label={`${strength ? "Strength, " : ""}${CRITERION_LABELS[criterion]}: ${slice}`}
               onClick={select}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -81,7 +83,7 @@ export function HighlightedEssay({
                 // box-decoration-clone repeats the tint, ring and radius on every line fragment.
                 "cursor-pointer rounded-sm px-0.5 box-decoration-clone",
                 "focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none",
-                TONE_CLASSES[CRITERION_TONE[criterion]].mark,
+                strength ? STRENGTH_MARK : TONE_CLASSES[CRITERION_TONE[criterion]].mark,
                 key === selectedKey && "ring-2 ring-foreground",
               )}
             >

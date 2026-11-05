@@ -22,6 +22,7 @@ function TaskView({ task }: { task: WritingTask }) {
           comment: x.comment,
           quote: x.quote,
           suggestion: x.suggestion,
+          kind: x.kind ?? null,
         })),
       ),
     [task.criteria],

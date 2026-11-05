@@ -12,6 +12,7 @@ function c(id: string, quote: string | null): FeedbackComment {
     comment: "c",
     quote,
     suggestion: null,
+    kind: null,
   };
 }
 
