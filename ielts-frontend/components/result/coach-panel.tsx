@@ -87,7 +87,9 @@ function Fix({
           </mark>
           {after}
         </p>
-        {!suggestion && <p className="text-xs text-foreground">No change suggested for these words.</p>}
+        {!suggestion && comment.kind == null && (
+          <p className="text-xs text-foreground">No change suggested for these words.</p>
+        )}
       </div>
       {suggestion && (
         <div className="grid gap-1 rounded-lg bg-state-correct/10 p-3">

@@ -60,14 +60,14 @@ export const CRITERION_SHORT: Record<Criterion, string> = {
   grammatical_range_accuracy: "GRA",
 };
 
-/**
- * Literal class strings per tone (Tailwind only sees full names). `mark` is a tinted, underlined
- * highlight — the underline keeps colour from being the only signal; text on it stays foreground.
- */
 /** Strengths are green with a double underline, so they differ from improvements without colour. */
 export const STRENGTH_MARK =
   "bg-state-correct/15 text-foreground underline decoration-double decoration-state-correct decoration-2 underline-offset-4";
 
+/**
+ * Literal class strings per tone (Tailwind only sees full names). `mark` is a tinted, underlined
+ * highlight — the underline keeps colour from being the only signal; text on it stays foreground.
+ */
 export const TONE_CLASSES: Record<CriterionTone, { mark: string; dot: string; bar: string }> = {
   task: {
     mark: "bg-crit-task/15 text-foreground underline decoration-crit-task decoration-2 underline-offset-4",

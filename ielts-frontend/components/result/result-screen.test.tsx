@@ -300,6 +300,7 @@ test("a highlight opens with Enter and with Space", async () => {
 });
 
 test("a placed comment without a suggestion shows no Better", async () => {
+  // kind null = graded before kinds existed.
   const base = makeWritingResult();
   const [task1, task2] = base.writing!.tasks;
   serve(
@@ -311,7 +312,7 @@ test("a placed comment without a suggestion shows no Better", async () => {
             ...task1,
             criteria: task1.criteria.map((c) =>
               c.criterion === "grammatical_range_accuracy"
-                ? { ...c, comments: [{ ...c.comments[0], suggestion: "   " }] }
+                ? { ...c, comments: [{ ...c.comments[0], kind: null, suggestion: "   " }] }
                 : c,
             ),
           },
@@ -334,6 +335,29 @@ test("a placed comment without a suggestion shows no Better", async () => {
   expect(mark).not.toHaveClass("line-through");
   expect(within(panel).getByText("No change suggested for these words.")).toBeInTheDocument();
 });
+
+test.each([["whitespace-only", "   "], ["null", null]])(
+  "an improvement with a %s suggestion shows no 'No change suggested' line",
+  async (_name, suggestion) => {
+    serve(
+      withTask1Comments({
+        grammatical_range_accuracy: [
+          { kind: "improvement", comment: "Use the past tense.", quote: "The graph go up", suggestion },
+        ],
+      }),
+    );
+    renderWithProviders(<ResultScreen sessionId="s-1" />);
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "Grammatical Range and Accuracy: The graph go up" }),
+    );
+    const panel = screen.getByRole("complementary", { name: /^Highlight/ });
+    expect(within(panel).getByText("Use the past tense.")).toBeInTheDocument();
+    expect(within(panel).queryByText("Better")).toBeNull();
+    expect(within(panel).queryByText("No change suggested for these words.")).toBeNull();
+    expect(within(panel).getByText("The graph go up", { selector: "mark" })).not.toHaveClass("line-through");
+  },
+);
 
 test("Escape closes the coach panel and returns focus to the highlight", async () => {
   serve(makeWritingResult());
