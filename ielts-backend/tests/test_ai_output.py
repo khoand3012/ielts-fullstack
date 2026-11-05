@@ -151,6 +151,13 @@ def test_parse_output_strength_drops_suggestion() -> None:
     assert (c.kind, c.quote, c.suggestion) == (CommentKind.STRENGTH, "x", None)
 
 
+def test_strength_suggestion_dropped_on_init() -> None:
+    strength = ModelComment(kind=CommentKind.STRENGTH, comment="x", quote="q", suggestion="y")
+    improvement = ModelComment(kind=CommentKind.IMPROVEMENT, comment="x", quote="q", suggestion="y")
+    assert strength.suggestion is None
+    assert improvement.suggestion == "y"
+
+
 def test_quote_check_keeps_kind() -> None:
     # A strength whose quote isn't in the essay loses the quote but stays a strength.
     comment = ModelComment(

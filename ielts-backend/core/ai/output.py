@@ -14,8 +14,8 @@ from pydantic import (
     ConfigDict,
     Field,
     ValidationError,
+    ValidationInfo,
     field_validator,
-    model_validator,
 )
 
 from core.models.enums import CommentKind, Criterion
@@ -52,11 +52,11 @@ class ModelComment(_Strict):
     quote: Annotated[str, Field(max_length=300)] | None
     suggestion: Annotated[str, Field(max_length=300)] | None
 
-    @model_validator(mode="after")
-    def _strength_has_no_suggestion(self) -> "ModelComment":
-        if self.kind is CommentKind.STRENGTH and self.suggestion is not None:
-            return self.model_copy(update={"suggestion": None})
-        return self
+    @field_validator("suggestion")
+    @classmethod
+    def _strength_has_no_suggestion(cls, value: str | None, info: ValidationInfo) -> str | None:
+        # `kind` is declared first, so it is already validated here.
+        return None if info.data.get("kind") is CommentKind.STRENGTH else value
 
 
 class ModelCriterion(_Strict):
