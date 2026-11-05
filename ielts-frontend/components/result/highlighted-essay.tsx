@@ -55,12 +55,13 @@ export function HighlightedEssay({
           const shown = commentsOn(h, comments, filter);
           if (shown.length === 0) return;
           const key = `${p}-${i}`;
-          const criterion = shown[0].criterion;
+          // One source for what the mark shows: the first visible comment.
+          const first = shown[0];
+          const { criterion } = first;
           const slice = paragraph.text.slice(h.start, h.end);
-          // The highlight takes the kind of its first comment, even if the filter hides it.
-          const strength = comments.find((x) => x.id === h.commentIds[0])?.kind === "strength";
+          const strength = first.kind === "strength";
           if (h.start > at) parts.push(paragraph.text.slice(at, h.start));
-          const select = () => onSelect(shown[0].id);
+          const select = () => onSelect(first.id);
           parts.push(
             // A <button> lays out as inline-block and breaks the paragraph flow on long quotes, so
             // the highlight is an inline mark with button semantics. Its text is only the slice,

@@ -805,6 +805,29 @@ test("an improvement attached to a strength highlight shows both in their own st
   expect(within(panel).getAllByText("You wrote")).toHaveLength(1);
 });
 
+test("a filtered highlight takes its kind from its first visible comment", async () => {
+  serve(
+    withTask1Comments({
+      task_achievement: [
+        { kind: "strength", comment: "Clear overview.", quote: "Overall, the graph go up", suggestion: null },
+      ],
+      grammatical_range_accuracy: [
+        { kind: "improvement", comment: "Use the past tense.", quote: "the graph go up", suggestion: "the graph went up" },
+      ],
+    }),
+  );
+  renderWithProviders(<ResultScreen sessionId="s-1" />);
+  const user = userEvent.setup();
+  expect(
+    await screen.findByRole("button", { name: "Strength, Task Achievement: Overall, the graph go up" }),
+  ).toBeInTheDocument();
+  const bars = screen.getByRole("group", { name: "Criteria" });
+  await user.click(within(bars).getByRole("button", { name: /Grammatical Range and Accuracy/ }));
+  const mark = screen.getByRole("button", { name: "Grammatical Range and Accuracy: Overall, the graph go up" });
+  expect(mark).not.toHaveClass("decoration-double");
+  expect(mark).not.toHaveClass("bg-state-correct/15");
+});
+
 test("comments without kind render as before", async () => {
   serve(withTask1Comments({}, (c) => {
     delete c.kind;
