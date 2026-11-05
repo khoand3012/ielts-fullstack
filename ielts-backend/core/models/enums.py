@@ -61,6 +61,13 @@ class Criterion(StrEnum):
     GRAMMATICAL_RANGE_ACCURACY = "grammatical_range_accuracy"
 
 
+class CommentKind(StrEnum):
+    """Whether a Writing feedback comment praises something or points to a way to improve."""
+
+    STRENGTH = "strength"
+    IMPROVEMENT = "improvement"
+
+
 class SignalSource(StrEnum):
     """Why an essay was flagged as a likely attempt to manipulate its grade."""
 

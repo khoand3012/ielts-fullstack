@@ -126,7 +126,7 @@ async def test_grade_ready(
     assert [t.band for t in result.tasks] == [D("6.0"), D("6.0")]
     assert result.focus
     assert row.model == get_settings().ai_model
-    assert row.prompt_version == "writing-academic-v1"
+    assert row.prompt_version == "writing-academic-v2"
     assert row.attempts == 1 and len(row.raw_responses) == 1
     assert row.raw_responses[0]["response"]["id"] == "gen-test"
     assert row.signals == [] and row.completed_at is not None

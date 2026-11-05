@@ -406,7 +406,7 @@ async def test_result_hides_internals(
         "signals",
         "manipulation",
         "prompt_version",
-        "writing-academic-v1",
+        "writing-academic-v2",
         get_settings().ai_model,
         note,
     ):

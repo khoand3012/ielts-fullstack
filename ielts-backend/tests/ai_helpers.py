@@ -10,8 +10,11 @@ import httpx
 from core.ai.output import TASK_CRITERIA
 
 
-def task_output(number: int, band: str = "6.0", quote: str | None = None) -> dict[str, Any]:
+def task_output(
+    number: int, band: str = "6.0", quote: str | None = None, kind: str = "improvement"
+) -> dict[str, Any]:
     comment = {
+        "kind": kind,
         "comment": "Ideas are relevant but under-developed.",
         "quote": quote,
         "suggestion": "a better version" if quote else None,

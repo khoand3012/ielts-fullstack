@@ -9,9 +9,16 @@ from collections.abc import Collection
 from decimal import Decimal
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
-from core.models.enums import Criterion
+from core.models.enums import CommentKind, Criterion
 from core.services.auto_grading import normalize
 from core.services.bands import validate_criterion_band
 
@@ -40,9 +47,16 @@ class _Strict(BaseModel):
 
 
 class ModelComment(_Strict):
+    kind: CommentKind
     comment: Annotated[str, Field(min_length=1, max_length=400)]
     quote: Annotated[str, Field(max_length=300)] | None
     suggestion: Annotated[str, Field(max_length=300)] | None
+
+    @model_validator(mode="after")
+    def _strength_has_no_suggestion(self) -> "ModelComment":
+        if self.kind is CommentKind.STRENGTH and self.suggestion is not None:
+            return self.model_copy(update={"suggestion": None})
+        return self
 
 
 class ModelCriterion(_Strict):
