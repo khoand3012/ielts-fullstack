@@ -285,6 +285,12 @@ export interface components {
             };
         };
         /**
+         * CommentKind
+         * @description Whether a Writing feedback comment praises something or points to a way to improve.
+         * @enum {string}
+         */
+        CommentKind: "strength" | "improvement";
+        /**
          * Criterion
          * @description IELTS Writing criteria; Task 1 is judged on Task Achievement, Task 2 on Task Response.
          * @enum {string}
@@ -660,6 +666,8 @@ export interface components {
              * @description A better version of the quote; plain text — render as text, never HTML or Markdown
              */
             suggestion: string | null;
+            /** @description strength or improvement; null when graded before prompt v2 */
+            kind?: components["schemas"]["CommentKind"] | null;
         };
         /** WritingCriterion */
         WritingCriterion: {
