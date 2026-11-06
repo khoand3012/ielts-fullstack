@@ -9,13 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from uuid_utils.compat import uuid7
 
 from core.cli import build_parser, run
-from core.models import AssessmentStatus, Role, SessionMode, Skill, TestSession, TestVersion, User
-from core.services import auth, sessions
+from core.models import AssessmentStatus, Role, SessionMode, Skill, TestSession, User
+from core.services import auth, grades, sessions
 from core.services.ai_grading import GradingRunner, RegradeCounts
 from core.services.sessions import RescoreCounts
 from tests.ai_helpers import FakeOpenRouter
 from tests.content_factories import listening_content, listening_key, reading_content, reading_key
-from tests.helpers import publish_test
+from tests.helpers import broken_answer_key, publish_test
 from tests.test_ai_grading import ESSAY1, ESSAY2, rows
 from tests.test_ai_review import MakeUser, graded
 
@@ -140,18 +140,15 @@ async def test_cli_regrade_auto(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def boom(row: TestSession, version: TestVersion, answers: dict[int, Any]) -> Any:
-        raise RuntimeError("marking bug")
-
     factory = async_sessionmaker(_engine, expire_on_commit=False)
     async with factory() as session:
         user = await auth.register(session, f"cli-{uuid7()}@t.com", "password123")
         v = await publish_test(session, Skill.READING)
         ts = await sessions.start_session(session, user, v.test_id, SessionMode.EXAM)
-        with monkeypatch.context() as m:
-            m.setattr(sessions, "mark_session", boom)
-            m.setattr(sessions, "log", _SilentLog())
-            await sessions.submit_session(session, user, ts.id)
+        async with broken_answer_key(session, v.id):
+            with monkeypatch.context() as m:
+                m.setattr(grades, "log", _SilentLog())
+                await sessions.submit_session(session, user, ts.id)
 
     assert await run(["regrade-auto"], factory) == 0
     assert "scored" in capsys.readouterr().out

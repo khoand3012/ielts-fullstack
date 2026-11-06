@@ -1,4 +1,3 @@
-import dataclasses
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal as D
@@ -16,16 +15,15 @@ from core.models import (
     SessionMode,
     Skill,
     TestSession,
-    TestVersion,
     User,
 )
 from core.schemas.session import AnswerInput
-from core.services import ai_grading, ai_review, sessions
+from core.services import ai_grading, ai_review, grades, sessions
 from core.services.ai_grading import GradingRunner
 from core.settings import get_settings
 from tests.ai_helpers import FakeOpenRouter, completion, model_output
 from tests.content_factories import writing_staff
-from tests.helpers import correct_answers, publish_test
+from tests.helpers import broken_answer_key, correct_answers, publish_test
 from tests.test_ai_grading import BOTH, ESSAY1, ESSAY2
 
 MakeUser = Callable[..., Awaitable[tuple[User, str]]]
@@ -225,16 +223,13 @@ async def test_result_failed_scoring_being_graded(
     make_user: MakeUser,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def boom(row: TestSession, version: TestVersion, answers: dict[int, Any]) -> Any:
-        raise RuntimeError("marking bug")
-
     user, tok = await make_user()
     ts = await start(db_session, user, Skill.READING)
-    with monkeypatch.context() as m:
-        m.setattr(sessions, "mark_session", boom)
-        m.setattr(sessions, "log", _SilentLog())
-        await sessions.submit_session(db_session, user, ts.id, NOW)
-    body = await result(app_client, tok, ts)
+    async with broken_answer_key(db_session, ts.test_version_id):
+        with monkeypatch.context() as m:
+            m.setattr(grades, "log", _SilentLog())
+            await sessions.submit_session(db_session, user, ts.id, NOW)
+        body = await result(app_client, tok, ts)
     assert (body["status"], body["raw_score"], body["questions"]) == ("being_graded", None, None)
 
 
@@ -262,18 +257,15 @@ async def test_result_survives_marking_failure_on_read(
     make_user: MakeUser,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def boom(row: TestSession, version: TestVersion, answers: dict[int, Any]) -> Any:
-        raise RuntimeError("marking bug after a deploy")
-
     user, tok = await make_user()
     full = dict(correct_answers(Skill.READING))
     ts = await start(db_session, user, Skill.READING, answers=full)
     await sessions.submit_session(db_session, user, ts.id, NOW)
     log = RecordingLog()
-    monkeypatch.setattr(sessions, "mark_session", boom)
     monkeypatch.setattr(sessions, "log", log)
-
-    body = await result(app_client, tok, ts)
+    # A marking bug shipped after it was scored.
+    async with broken_answer_key(db_session, ts.test_version_id):
+        body = await result(app_client, tok, ts)
     assert (body["status"], body["raw_score"], body["band"]) == ("graded", 40, 9.0)
     assert (body["questions"], body["answered"]) == (None, None)
     assert [e for e, _ in log.events] == ["auto_grading_failed"]
@@ -289,19 +281,18 @@ async def test_result_logs_drift_and_keeps_stored_total(
     full = dict(correct_answers(Skill.READING))
     ts = await start(db_session, user, Skill.READING, answers=full)
     await sessions.submit_session(db_session, user, ts.id, NOW)
-    real = sessions.mark_session
-
-    def changed_rules(row: TestSession, version: TestVersion, answers: dict[int, Any]) -> Any:
-        return dataclasses.replace(real(row, version, answers), raw_score=39)
-
+    # Scored under older rules that gave 39 (band 8.5); today's rules give 40.
+    await db_session.execute(
+        update(TestSession).where(TestSession.id == ts.id).values(raw_score=39, band=D("8.5"))
+    )
+    await db_session.commit()
     log = RecordingLog()
-    monkeypatch.setattr(sessions, "mark_session", changed_rules)
     monkeypatch.setattr(sessions, "log", log)
 
     body = await result(app_client, tok, ts)
-    assert (body["raw_score"], body["band"]) == (40, 9.0)
+    assert (body["raw_score"], body["band"]) == (39, 8.5)
     assert log.events == [
-        ("auto_grading_drift", {"session_id": str(ts.id), "stored": 40, "recomputed": 39})
+        ("auto_grading_drift", {"session_id": str(ts.id), "stored": 39, "recomputed": 40})
     ]
 
 

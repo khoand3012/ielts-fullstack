@@ -22,7 +22,6 @@ from core.models import (
     Answer,
     AssessmentStatus,
     GradingMethod,
-    Module,
     SessionMode,
     SessionStatus,
     Skill,
@@ -39,7 +38,7 @@ from core.schemas.session import (
     WritingResultView,
     WritingTaskView,
 )
-from core.services import ai_grading, auto_grading, catalog, storage
+from core.services import ai_grading, auto_grading, catalog, grades, storage
 from core.services.content import ItemSpec, item_index, section_titles
 from core.services.entitlements import check_and_consume
 from core.settings import get_settings
@@ -155,7 +154,7 @@ async def get_result(
         return ResultData(ts, None, None, None)
     version, answers = await get_version(db, ts), await get_answers(db, ts)
     try:
-        score = mark_session(ts, version, answers)
+        score = grades.mark_session(ts, version, answers)
         content = catalog.load_content(Skill(ts.skill), version)
     except Exception:
         # The stored score is still valid; show it without the per-question marks.
@@ -373,21 +372,6 @@ async def set_manual_grading(
     return ts
 
 
-def mark_session(
-    ts: TestSession, version: TestVersion, answers: dict[int, Any]
-) -> auto_grading.Score:
-    """Score a Reading/Listening session against its own version's key and module."""
-    skill = Skill(ts.skill)
-    return auto_grading.score(
-        skill,
-        Module(version.module) if version.module else None,
-        SessionMode(ts.mode),
-        item_index(skill, catalog.load_content(skill, version)),
-        catalog.load_answer_key(version),
-        answers,
-    )
-
-
 async def on_session_submitted(db: AsyncSession, ts: TestSession) -> None:
     """Runs once per submitted session, inside the submitting transaction. Reading and
     Listening are scored here; AI-graded Writing gets its assessment row, graded once the
@@ -395,18 +379,8 @@ async def on_session_submitted(db: AsyncSession, ts: TestSession) -> None:
     if ts.grading_method == GradingMethod.AI:
         db.add(AIAssessment(test_session_id=ts.id))
         return
-    if ts.grading_method != GradingMethod.AUTO:
-        return
-    version = await get_version(db, ts)
-    answers = await get_answers(db, ts)
-    try:
-        result = mark_session(ts, version, answers)
-    except Exception:
-        # A scoring bug must never block a submission; the startup sweep scores it later.
-        log.exception("auto_grading_failed", session_id=str(ts.id))
-        return
-    ts.raw_score = result.raw_score
-    ts.band = result.band
+    if ts.grading_method == GradingMethod.AUTO:
+        await grades.record_auto_score(db, ts)
 
 
 _GRADING_METHOD = case(
@@ -511,14 +485,16 @@ async def rescore_sessions(
             async with factory() as db:
                 ts = await db.get(TestSession, session_id)
                 assert ts is not None
-                result = mark_session(ts, await get_version(db, ts), await get_answers(db, ts))
-                ts.raw_score = result.raw_score
-                ts.band = result.band
+                score = await grades.record_auto_score(db, ts)
                 await db.commit()
-            scored += 1
         except Exception:
+            # Not marking (that is logged and returns None) but loading or committing.
             log.exception("auto_grading_failed", session_id=str(session_id))
+            score = None
+        if score is None:
             failed += 1
+        else:
+            scored += 1
     return RescoreCounts(scored, failed)
 
 

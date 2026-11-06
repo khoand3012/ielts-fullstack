@@ -2,6 +2,17 @@
 
 Domain terms shared by `ielts-backend/` and `ielts-frontend/`. Use these names in code, docs and reviews.
 
+## Grading
+
+**Grade** — what a submitted session is scored: `raw_score` (Reading/Listening only, correct answers out of 40) and `band` on `test_sessions`. Students see it on the result page.
+
+**Grade recording** — the backend module (`core/services/grades.py`) that is the only code writing a session's grade:
+- **auto score** — marks a Reading/Listening session and stores its score. If marking throws, the session stays unscored and the startup sweep retries it.
+- **AI outcome** — moves an AI assessment out of the status it is expected to be in (`processing` when grading finishes, `held` when an admin releases it). Only a `ready` outcome gives the session its band.
+- Teacher grades will be recorded here too (phase 8).
+
+**Marking failure** — marking a Reading/Listening session throws, for example because of a bug in the marking rules or an answer key the code cannot read. It never blocks a submission.
+
 ## Writing feedback
 
 **Writing comment** — one piece of AI feedback on a Writing task, filed under one criterion (Task Response/Achievement, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy). It has comment text, an optional quote from the essay, an optional suggestion and a kind.

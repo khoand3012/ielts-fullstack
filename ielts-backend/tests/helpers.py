@@ -1,3 +1,6 @@
+import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +20,29 @@ from tests.content_factories import (
     writing_content,
     writing_staff,
 )
+
+
+async def _set_answer_key(db: AsyncSession, version_id: uuid.UUID, key: Any) -> Any:
+    version = await db.get(TestVersion, version_id)
+    assert version is not None
+    old = version.answer_key
+    version.answer_key = key
+    await db.commit()
+    return old
+
+
+@asynccontextmanager
+async def broken_answer_key(db: AsyncSession, version_id: uuid.UUID) -> AsyncIterator[None]:
+    """Within the block, the version's stored answer key cannot be read (each question must
+    map to a list of answers), so marking a session of it throws: the marking-failure path,
+    reached with no code replaced. The app never changes a published version; tests do. The
+    key is mended on exit, so later sweeps over the shared test database can score it."""
+    old = await _set_answer_key(db, version_id, {"1": "not a list of answers"})
+    try:
+        yield
+    finally:
+        await _set_answer_key(db, version_id, old)
+
 
 _DEFAULTS: dict[Skill, tuple[Any, Any, Any]] = {
     Skill.READING: (reading_content, reading_key, dict),
