@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from api.routers import admin as admin_router
 from api.routers import auth as auth_router
+from api.routers import grading as grading_router
 from api.routers import health as health_router
 from api.routers import sessions as sessions_router
 from api.routers import tests as tests_router
@@ -25,6 +26,7 @@ OPENAPI_TAGS = [
     {"name": "admin", "description": "Admin-only: users, results, grading oversight."},
     {"name": "tests", "description": "Published tests students can take."},
     {"name": "sessions", "description": "Taking a test: start, autosave answers, submit."},
+    {"name": "grading", "description": "Teachers: the grading queue, claims, drafts and grades."},
 ]
 
 
@@ -69,6 +71,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_router.router)
     app.include_router(tests_router.router)
     app.include_router(sessions_router.router)
+    app.include_router(grading_router.router)
     return app
 
 
