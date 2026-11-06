@@ -6,10 +6,10 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from core.models import Module, SessionMode, Skill, TestSession, TestVersion, User
+from core.models import Module, SessionMode, Skill, TestSession, User
 from core.schemas.session import AnswerInput
-from core.services import sessions
-from tests.helpers import correct_answers, publish_test
+from core.services import grades, sessions
+from tests.helpers import broken_answer_key, correct_answers, publish_test
 
 MakeUser = Callable[..., Awaitable[tuple[User, str]]]
 NOW = datetime(2026, 10, 26, 9, 0, tzinfo=UTC)
@@ -140,15 +140,12 @@ async def test_scoring_failure_still_submits(
     make_user: MakeUser,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def boom(ts: TestSession, version: TestVersion, answers: dict[int, Any]) -> Any:
-        raise RuntimeError("marking bug")
-
     log = RecordingLog()
-    monkeypatch.setattr(sessions, "mark_session", boom)
-    monkeypatch.setattr(sessions, "log", log)
+    monkeypatch.setattr(grades, "log", log)
     user, _ = await make_user()
     ts = await start(db_session, user, Skill.READING)
-    done = await sessions.submit_session(db_session, user, ts.id, NOW)
+    async with broken_answer_key(db_session, ts.test_version_id):
+        done = await sessions.submit_session(db_session, user, ts.id, NOW)
     assert done.status == "submitted"
     row = await stored(_engine, ts)
     assert (row.status, row.raw_score, row.band) == ("submitted", None, None)
@@ -164,16 +161,9 @@ async def test_batch_auto_submit_with_one_failure(
     user, _ = await make_user()
     bad = await start(db_session, user, Skill.READING)
     good = await start(db_session, user, Skill.READING)
-    real = sessions.mark_session
-
-    def flaky(ts: TestSession, version: TestVersion, answers: dict[int, Any]) -> Any:
-        if ts.id == bad.id:
-            raise RuntimeError("marking bug")
-        return real(ts, version, answers)
-
-    monkeypatch.setattr(sessions, "mark_session", flaky)
-    monkeypatch.setattr(sessions, "log", RecordingLog())
-    assert await sessions.auto_submit_expired(db_session, AFTER_DEADLINE) >= 2
+    monkeypatch.setattr(grades, "log", RecordingLog())
+    async with broken_answer_key(db_session, bad.test_version_id):
+        assert await sessions.auto_submit_expired(db_session, AFTER_DEADLINE) >= 2
     bad_row, good_row = await stored(_engine, bad), await stored(_engine, good)
     assert (bad_row.status, bad_row.raw_score) == ("submitted", None)
     assert (good_row.status, good_row.raw_score, good_row.band) == ("submitted", 0, D("0.0"))

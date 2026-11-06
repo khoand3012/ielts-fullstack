@@ -8,11 +8,12 @@ from decimal import Decimal
 from typing import Any
 
 import structlog
-from sqlalchemy import Select, select, update
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import ForbiddenError, NotFoundError
 from core.models import AIAssessment, Answer, AssessmentStatus, Role, TestSession, User
+from core.services import grades
 
 log = structlog.get_logger()
 
@@ -81,22 +82,18 @@ async def release_held(
         raise NotFoundError("user not found")
     if admin.role != Role.ADMIN:
         raise ForbiddenError("only admins can release held essays")
-    released = (
-        await db.execute(
-            update(AIAssessment)
-            .where(AIAssessment.id == assessment_id, AIAssessment.status == AssessmentStatus.HELD)
-            .values(
-                status=AssessmentStatus.READY,
-                released_by=admin.id,
-                released_at=now or datetime.now(UTC),
-            )
-            .returning(AIAssessment.test_session_id, AIAssessment.band)
-        )
-    ).first()
-    if released is None:
+    session_id = await grades.record_ai_outcome(
+        db,
+        AIAssessment.id == assessment_id,
+        expected=AssessmentStatus.HELD,
+        values={
+            "status": AssessmentStatus.READY,
+            "released_by": admin.id,
+            "released_at": now or datetime.now(UTC),
+        },
+    )
+    if session_id is None:
         raise NotFoundError("no held assessment with that id")
-    session_id, band = released
-    await db.execute(update(TestSession).where(TestSession.id == session_id).values(band=band))
     await db.commit()
     log.info(
         "ai_grading_released",

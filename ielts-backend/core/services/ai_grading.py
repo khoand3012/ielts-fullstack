@@ -49,7 +49,7 @@ from core.models import (
 )
 from core.schemas.content import WritingContent
 from core.schemas.session import WritingComment, WritingCriterion, WritingResult, WritingTask
-from core.services import catalog, storage
+from core.services import catalog, grades, storage
 from core.services.bands import task_band, writing_overall
 from core.services.content import RASTER_IMAGE_EXTENSIONS
 from core.settings import get_settings
@@ -266,27 +266,17 @@ def _blank_task(number: int, mode: SessionMode) -> WritingTask:
     return WritingTask(number=number, band=None, word_count=0, criteria=criteria)
 
 
-async def _finish(
-    runner: GradingRunner, session_id: uuid.UUID, values: dict[str, Any], band: Decimal | None
-) -> bool:
-    """The outcome, written only if the row is still `processing`; a `ready` outcome also
-    sets the session's band."""
+async def _finish(runner: GradingRunner, session_id: uuid.UUID, values: dict[str, Any]) -> bool:
+    """The outcome, written only if the row is still `processing` (see `grades`)."""
     async with runner.factory() as db:
-        updated = await db.scalar(
-            update(AIAssessment)
-            .where(
-                AIAssessment.test_session_id == session_id,
-                AIAssessment.status == AssessmentStatus.PROCESSING,
-            )
-            .values(completed_at=_now(), **values)
-            .returning(AIAssessment.id)
+        moved = await grades.record_ai_outcome(
+            db,
+            AIAssessment.test_session_id == session_id,
+            expected=AssessmentStatus.PROCESSING,
+            values={"completed_at": _now(), **values},
         )
-        if updated is not None and values["status"] == AssessmentStatus.READY:
-            await db.execute(
-                update(TestSession).where(TestSession.id == session_id).values(band=band)
-            )
         await db.commit()
-        return updated is not None
+        return moved is not None
 
 
 async def grade_session(runner: GradingRunner, session_id: uuid.UUID) -> AssessmentStatus | None:
@@ -309,7 +299,6 @@ async def grade_session(runner: GradingRunner, session_id: uuid.UUID) -> Assessm
                     runner,
                     session_id,
                     {"status": AssessmentStatus.FAILED, "error": str(outcome)},
-                    None,
                 ):
                     log.error(
                         "ai_grading_failed", session_id=str(session_id), error=_first_line(outcome)
@@ -356,7 +345,7 @@ async def grade_session(runner: GradingRunner, session_id: uuid.UUID) -> Assessm
             "band": bands.overall,
             "signals": [s.to_json() for s in signals],
         }
-        if not await _finish(runner, session_id, values, bands.overall):
+        if not await _finish(runner, session_id, values):
             return None
         if status == AssessmentStatus.HELD:
             log.warning(

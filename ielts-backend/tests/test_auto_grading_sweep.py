@@ -10,12 +10,12 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from uuid_utils.compat import uuid7
 
-from core.models import Module, SessionMode, Skill, TestSession, TestVersion, User
+from core.models import Module, SessionMode, Skill, TestSession, User
 from core.schemas.session import AnswerInput
-from core.services import sessions
+from core.services import grades, sessions
 from core.settings import get_settings
 from tests.content_factories import reading_key
-from tests.helpers import correct_answers, publish_test
+from tests.helpers import broken_answer_key, correct_answers, publish_test
 
 MakeUser = Callable[..., Awaitable[tuple[User, str]]]
 Factory = async_sessionmaker[AsyncSession]
@@ -33,10 +33,6 @@ class RecordingLog:
         self.events.append(event)
 
 
-def _boom(ts: TestSession, version: TestVersion, answers: dict[int, Any]) -> Any:
-    raise RuntimeError("marking bug")
-
-
 @pytest.fixture
 def factory(_engine: AsyncEngine) -> Factory:
     return async_sessionmaker(_engine, expire_on_commit=False)
@@ -51,7 +47,8 @@ async def submitted(
     fail: bool = False,
     monkeypatch: pytest.MonkeyPatch | None = None,
 ) -> TestSession:
-    """A submitted Reading exam; with `fail`, marking throws so it is left unscored."""
+    """A submitted Reading exam; with `fail`, its answer key is broken while it is submitted,
+    so marking throws and it is left unscored, then mended (as the fixing deploy would)."""
     async with factory() as db:
         v = await publish_test(db, Skill.READING, slug=slug)
         ts = await sessions.start_session(db, user, v.test_id, SessionMode.EXAM, NOW)
@@ -61,10 +58,10 @@ async def submitted(
         if not fail:
             return await sessions.submit_session(db, user, ts.id, NOW)
         assert monkeypatch is not None
-        with monkeypatch.context() as m:
-            m.setattr(sessions, "mark_session", _boom)
-            m.setattr(sessions, "log", RecordingLog())
-            return await sessions.submit_session(db, user, ts.id, NOW)
+        async with broken_answer_key(db, ts.test_version_id):
+            with monkeypatch.context() as m:
+                m.setattr(grades, "log", RecordingLog())
+                return await sessions.submit_session(db, user, ts.id, NOW)
 
 
 async def score_of(factory: Factory, ts: TestSession) -> tuple[int | None, D | None]:
@@ -111,17 +108,10 @@ async def test_rescore_counts_failures(
 ) -> None:
     user, _ = await make_user()
     ts = await submitted(factory, user, {}, fail=True, monkeypatch=monkeypatch)
-    real = sessions.mark_session
-
-    def fails_for_one(row: TestSession, version: TestVersion, answers: dict[int, Any]) -> Any:
-        if row.id == ts.id:
-            raise RuntimeError("still broken")
-        return real(row, version, answers)
-
     log = RecordingLog()
-    monkeypatch.setattr(sessions, "mark_session", fails_for_one)
-    monkeypatch.setattr(sessions, "log", log)
-    counts = await sessions.rescore_sessions(factory)
+    monkeypatch.setattr(grades, "log", log)
+    async with factory() as db, broken_answer_key(db, ts.test_version_id):  # still broken
+        counts = await sessions.rescore_sessions(factory)
     assert counts.failed >= 1
     assert "auto_grading_failed" in log.events
     assert await score_of(factory, ts) == (None, None)
