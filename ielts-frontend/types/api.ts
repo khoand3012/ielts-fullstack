@@ -140,6 +140,40 @@ export interface paths {
         patch: operations["admin_update_user"];
         trace?: never;
     };
+    "/admin/grading/{grade_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release Claim */
+        post: operations["admin_grading_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/grading/{grade_id}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reassign Claim */
+        post: operations["admin_grading_reassign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tests": {
         parameters: {
             query?: never;
@@ -261,10 +295,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/grading/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Queue */
+        get: operations["grading_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/grading/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mine */
+        get: operations["grading_mine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/grading/{grade_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detail */
+        get: operations["grading_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/grading/{grade_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Draft */
+        put: operations["grading_save_draft"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/grading/{grade_id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim */
+        post: operations["grading_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/grading/{grade_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release */
+        post: operations["grading_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/grading/{grade_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit */
+        post: operations["grading_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AIDraft
+         * @description The held AI grade of a flagged essay, and why it was held.
+         */
+        AIDraft: {
+            /** Band */
+            band: number | null;
+            result: components["schemas"]["WritingResult"] | null;
+            /** Signals */
+            signals: {
+                [key: string]: unknown;
+            }[];
+        };
         /** AnswerInput */
         AnswerInput: {
             /** Question */
@@ -296,16 +462,89 @@ export interface components {
          * @enum {string}
          */
         Criterion: "task_achievement" | "task_response" | "coherence_cohesion" | "lexical_resource" | "grammatical_range_accuracy";
+        /** CriterionScore */
+        "CriterionScore-Input": {
+            /** Band */
+            band: number | string;
+            /** Comment */
+            comment?: string | null;
+        };
+        /** CriterionScore */
+        "CriterionScore-Output": {
+            /** Band */
+            band: number;
+            /** Comment */
+            comment?: string | null;
+        };
+        /** GradeDetail */
+        GradeDetail: {
+            /**
+             * Grade Id
+             * Format: uuid
+             */
+            grade_id: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            skill: components["schemas"]["Skill"];
+            origin: components["schemas"]["HumanGradeOrigin"];
+            status: components["schemas"]["HumanGradeStatus"];
+            /** Test Title */
+            test_title: string;
+            /** Student Email */
+            student_email: string;
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+            /** Claimed At */
+            claimed_at: string | null;
+            mode: components["schemas"]["SessionMode"];
+            /** Tasks */
+            tasks: components["schemas"]["GradingTask"][];
+            draft: components["schemas"]["WritingScoresDraft-Output"] | null;
+            ai: components["schemas"]["AIDraft"] | null;
+        };
         /**
          * GradingMethod
          * @enum {string}
          */
         GradingMethod: "auto" | "ai" | "human";
+        /** GradingTask */
+        GradingTask: {
+            /** Number */
+            number: number;
+            /** Prompt */
+            prompt: string;
+            /** Image Url */
+            image_url: string | null;
+            /** Min Words */
+            min_words: number;
+            /** Text */
+            text: string;
+            /** Word Count */
+            word_count: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HumanGradeOrigin
+         * @description Why a session is graded by a teacher.
+         * @enum {string}
+         */
+        HumanGradeOrigin: "speaking" | "student_request" | "ai_fallback" | "ai_flagged";
+        /**
+         * HumanGradeStatus
+         * @description A teacher-graded session's place in the queue.
+         * @enum {string}
+         */
+        HumanGradeStatus: "awaiting_grader" | "claimed" | "graded";
         /** LoginRequest */
         LoginRequest: {
             /**
@@ -327,6 +566,48 @@ export interface components {
          * @enum {string}
          */
         Plan: "free" | "paid";
+        /** QueueItem */
+        QueueItem: {
+            /**
+             * Grade Id
+             * Format: uuid
+             */
+            grade_id: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            skill: components["schemas"]["Skill"];
+            origin: components["schemas"]["HumanGradeOrigin"];
+            status: components["schemas"]["HumanGradeStatus"];
+            /** Test Title */
+            test_title: string;
+            /** Student Email */
+            student_email: string;
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+            /** Claimed At */
+            claimed_at: string | null;
+        };
+        /** QueuePage */
+        QueuePage: {
+            /** Items */
+            items: components["schemas"]["QueueItem"][];
+            /** Total */
+            total: number;
+        };
+        /** ReassignRequest */
+        ReassignRequest: {
+            /**
+             * Teacher Id
+             * Format: uuid
+             */
+            teacher_id: string;
+        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
@@ -568,6 +849,48 @@ export interface components {
          * @enum {string}
          */
         SubmitReason: "student" | "timeout";
+        /**
+         * TaskScores
+         * @description One task's finished grade: a band on each of the task's four criteria, and feedback.
+         */
+        TaskScores: {
+            /** Number */
+            number: number;
+            /** Criteria */
+            criteria: {
+                [key: string]: components["schemas"]["CriterionScore-Input"];
+            };
+            /** Feedback */
+            feedback: string;
+        };
+        /**
+         * TaskScoresDraft
+         * @description One task's scores so far; any criterion may still be missing.
+         */
+        "TaskScoresDraft-Input": {
+            /** Number */
+            number: number;
+            /** Criteria */
+            criteria: {
+                [key: string]: components["schemas"]["CriterionScore-Input"] | null;
+            };
+            /** Feedback */
+            feedback?: string | null;
+        };
+        /**
+         * TaskScoresDraft
+         * @description One task's scores so far; any criterion may still be missing.
+         */
+        "TaskScoresDraft-Output": {
+            /** Number */
+            number: number;
+            /** Criteria */
+            criteria: {
+                [key: string]: components["schemas"]["CriterionScore-Output"] | null;
+            };
+            /** Feedback */
+            feedback?: string | null;
+        };
         /** TestListResponse */
         TestListResponse: {
             /** Items */
@@ -678,6 +1001,19 @@ export interface components {
             comments: components["schemas"]["WritingComment"][];
         };
         /**
+         * WritingResult
+         * @description The AI's feedback on a Writing session, as stored on the assessment and served.
+         */
+        WritingResult: {
+            /** Tasks */
+            tasks: components["schemas"]["WritingTask"][];
+            /**
+             * Focus
+             * @description The changes most likely to lift the band, most important first; plain text — render as text, never HTML or Markdown
+             */
+            focus: string[];
+        };
+        /**
          * WritingResultView
          * @description `WritingResult` as served, with each task's essay text.
          */
@@ -689,6 +1025,43 @@ export interface components {
              * @description The changes most likely to lift the band, most important first; plain text — render as text, never HTML or Markdown
              */
             focus: string[];
+        };
+        /**
+         * WritingScores
+         * @description A submitted Writing grade: one entry per written task; blank tasks are left out.
+         */
+        WritingScores: {
+            /** Tasks */
+            tasks: components["schemas"]["TaskScores"][];
+        };
+        /**
+         * WritingScoresDraft
+         * @description A teacher's private work in progress, saved as they go (spec §5.2 step 5).
+         */
+        "WritingScoresDraft-Input": {
+            /** Tasks */
+            tasks: components["schemas"]["TaskScoresDraft-Input"][];
+        };
+        /**
+         * WritingScoresDraft
+         * @description A teacher's private work in progress, saved as they go (spec §5.2 step 5).
+         */
+        "WritingScoresDraft-Output": {
+            /** Tasks */
+            tasks: components["schemas"]["TaskScoresDraft-Output"][];
+        };
+        /** WritingTask */
+        WritingTask: {
+            /** Number */
+            number: number;
+            /** Band */
+            band: number | null;
+            /** Word Count */
+            word_count: number;
+            /** Criteria */
+            criteria: components["schemas"]["WritingCriterion"][];
+            /** Feedback */
+            feedback?: string | null;
         };
         /**
          * WritingTaskView
@@ -703,6 +1076,8 @@ export interface components {
             word_count: number;
             /** Criteria */
             criteria: components["schemas"]["WritingCriterion"][];
+            /** Feedback */
+            feedback?: string | null;
             /** Text */
             text: string;
         };
@@ -943,6 +1318,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_grading_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grade_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_grading_reassign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grade_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueItem"];
                 };
             };
             /** @description Validation Error */
@@ -1237,6 +1676,218 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SessionResult"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grading_queue: {
+        parameters: {
+            query?: {
+                skill?: components["schemas"]["Skill"] | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueuePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grading_mine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueItem"][];
+                };
+            };
+        };
+    };
+    grading_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grade_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grading_save_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grade_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WritingScoresDraft-Input"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WritingScoresDraft-Output"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grading_claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grade_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grading_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grade_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grading_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grade_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WritingScores"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

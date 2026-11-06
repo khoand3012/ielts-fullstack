@@ -363,6 +363,105 @@
     }
    }
   },
+  "/admin/grading/{grade_id}/release": {
+   "post": {
+    "tags": [
+     "admin"
+    ],
+    "summary": "Release Claim",
+    "operationId": "admin_grading_release",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "grade_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Grade Id"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/admin/grading/{grade_id}/reassign": {
+   "post": {
+    "tags": [
+     "admin"
+    ],
+    "summary": "Reassign Claim",
+    "operationId": "admin_grading_reassign",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "grade_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Grade Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReassignRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QueueItem"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/tests": {
    "get": {
     "tags": [
@@ -866,10 +965,404 @@
      }
     }
    }
+  },
+  "/grading/queue": {
+   "get": {
+    "tags": [
+     "grading"
+    ],
+    "summary": "Queue",
+    "operationId": "grading_queue",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "skill",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/Skill"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Skill"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 100,
+       "minimum": 1,
+       "default": 50,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 0,
+       "default": 0,
+       "title": "Offset"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QueuePage"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/grading/mine": {
+   "get": {
+    "tags": [
+     "grading"
+    ],
+    "summary": "Mine",
+    "operationId": "grading_mine",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/QueueItem"
+         },
+         "type": "array",
+         "title": "Response Grading Mine"
+        }
+       }
+      }
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ]
+   }
+  },
+  "/grading/{grade_id}": {
+   "get": {
+    "tags": [
+     "grading"
+    ],
+    "summary": "Detail",
+    "operationId": "grading_detail",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "grade_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Grade Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GradeDetail"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/grading/{grade_id}/draft": {
+   "put": {
+    "tags": [
+     "grading"
+    ],
+    "summary": "Save Draft",
+    "operationId": "grading_save_draft",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "grade_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Grade Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/WritingScoresDraft-Input"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WritingScoresDraft-Output"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/grading/{grade_id}/claim": {
+   "post": {
+    "tags": [
+     "grading"
+    ],
+    "summary": "Claim",
+    "operationId": "grading_claim",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "grade_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Grade Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QueueItem"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/grading/{grade_id}/release": {
+   "post": {
+    "tags": [
+     "grading"
+    ],
+    "summary": "Release",
+    "operationId": "grading_release",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "grade_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Grade Id"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/grading/{grade_id}/submit": {
+   "post": {
+    "tags": [
+     "grading"
+    ],
+    "summary": "Submit",
+    "operationId": "grading_submit",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "grade_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Grade Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/WritingScores"
+       }
+      }
+     }
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
   "schemas": {
+   "AIDraft": {
+    "properties": {
+     "band": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Band"
+     },
+     "result": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/WritingResult"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "signals": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Signals"
+     }
+    },
+    "type": "object",
+    "required": [
+     "band",
+     "result",
+     "signals"
+    ],
+    "title": "AIDraft",
+    "description": "The held AI grade of a flagged essay, and why it was held."
+   },
    "AnswerInput": {
     "properties": {
      "question": {
@@ -954,6 +1447,159 @@
     "title": "Criterion",
     "description": "IELTS Writing criteria; Task 1 is judged on Task Achievement, Task 2 on Task Response."
    },
+   "CriterionScore-Input": {
+    "properties": {
+     "band": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "string",
+        "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+       }
+      ],
+      "title": "Band"
+     },
+     "comment": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 2000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Comment"
+     }
+    },
+    "type": "object",
+    "required": [
+     "band"
+    ],
+    "title": "CriterionScore"
+   },
+   "CriterionScore-Output": {
+    "properties": {
+     "band": {
+      "type": "number",
+      "title": "Band"
+     },
+     "comment": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 2000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Comment"
+     }
+    },
+    "type": "object",
+    "required": [
+     "band"
+    ],
+    "title": "CriterionScore"
+   },
+   "GradeDetail": {
+    "properties": {
+     "grade_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Grade Id"
+     },
+     "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Session Id"
+     },
+     "skill": {
+      "$ref": "#/components/schemas/Skill"
+     },
+     "origin": {
+      "$ref": "#/components/schemas/HumanGradeOrigin"
+     },
+     "status": {
+      "$ref": "#/components/schemas/HumanGradeStatus"
+     },
+     "test_title": {
+      "type": "string",
+      "title": "Test Title"
+     },
+     "student_email": {
+      "type": "string",
+      "title": "Student Email"
+     },
+     "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Submitted At"
+     },
+     "claimed_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Claimed At"
+     },
+     "mode": {
+      "$ref": "#/components/schemas/SessionMode"
+     },
+     "tasks": {
+      "items": {
+       "$ref": "#/components/schemas/GradingTask"
+      },
+      "type": "array",
+      "title": "Tasks"
+     },
+     "draft": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/WritingScoresDraft-Output"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "ai": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/AIDraft"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "grade_id",
+     "session_id",
+     "skill",
+     "origin",
+     "status",
+     "test_title",
+     "student_email",
+     "submitted_at",
+     "claimed_at",
+     "mode",
+     "tasks",
+     "draft",
+     "ai"
+    ],
+    "title": "GradeDetail"
+   },
    "GradingMethod": {
     "type": "string",
     "enum": [
@@ -962,6 +1608,51 @@
      "human"
     ],
     "title": "GradingMethod"
+   },
+   "GradingTask": {
+    "properties": {
+     "number": {
+      "type": "integer",
+      "title": "Number"
+     },
+     "prompt": {
+      "type": "string",
+      "title": "Prompt"
+     },
+     "image_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Url"
+     },
+     "min_words": {
+      "type": "integer",
+      "title": "Min Words"
+     },
+     "text": {
+      "type": "string",
+      "title": "Text"
+     },
+     "word_count": {
+      "type": "integer",
+      "title": "Word Count"
+     }
+    },
+    "type": "object",
+    "required": [
+     "number",
+     "prompt",
+     "image_url",
+     "min_words",
+     "text",
+     "word_count"
+    ],
+    "title": "GradingTask"
    },
    "HTTPValidationError": {
     "properties": {
@@ -975,6 +1666,27 @@
     },
     "type": "object",
     "title": "HTTPValidationError"
+   },
+   "HumanGradeOrigin": {
+    "type": "string",
+    "enum": [
+     "speaking",
+     "student_request",
+     "ai_fallback",
+     "ai_flagged"
+    ],
+    "title": "HumanGradeOrigin",
+    "description": "Why a session is graded by a teacher."
+   },
+   "HumanGradeStatus": {
+    "type": "string",
+    "enum": [
+     "awaiting_grader",
+     "claimed",
+     "graded"
+    ],
+    "title": "HumanGradeStatus",
+    "description": "A teacher-graded session's place in the queue."
    },
    "LoginRequest": {
     "properties": {
@@ -1011,6 +1723,102 @@
      "paid"
     ],
     "title": "Plan"
+   },
+   "QueueItem": {
+    "properties": {
+     "grade_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Grade Id"
+     },
+     "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Session Id"
+     },
+     "skill": {
+      "$ref": "#/components/schemas/Skill"
+     },
+     "origin": {
+      "$ref": "#/components/schemas/HumanGradeOrigin"
+     },
+     "status": {
+      "$ref": "#/components/schemas/HumanGradeStatus"
+     },
+     "test_title": {
+      "type": "string",
+      "title": "Test Title"
+     },
+     "student_email": {
+      "type": "string",
+      "title": "Student Email"
+     },
+     "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Submitted At"
+     },
+     "claimed_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Claimed At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "grade_id",
+     "session_id",
+     "skill",
+     "origin",
+     "status",
+     "test_title",
+     "student_email",
+     "submitted_at",
+     "claimed_at"
+    ],
+    "title": "QueueItem"
+   },
+   "QueuePage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/QueueItem"
+      },
+      "type": "array",
+      "title": "Items"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     }
+    },
+    "type": "object",
+    "required": [
+     "items",
+     "total"
+    ],
+    "title": "QueuePage"
+   },
+   "ReassignRequest": {
+    "properties": {
+     "teacher_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Teacher Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "teacher_id"
+    ],
+    "title": "ReassignRequest"
    },
    "RefreshRequest": {
     "properties": {
@@ -1735,6 +2543,126 @@
     ],
     "title": "SubmitReason"
    },
+   "TaskScores": {
+    "properties": {
+     "number": {
+      "type": "integer",
+      "title": "Number"
+     },
+     "criteria": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/CriterionScore-Input"
+      },
+      "propertyNames": {
+       "$ref": "#/components/schemas/Criterion"
+      },
+      "type": "object",
+      "title": "Criteria"
+     },
+     "feedback": {
+      "type": "string",
+      "maxLength": 5000,
+      "minLength": 1,
+      "title": "Feedback"
+     }
+    },
+    "type": "object",
+    "required": [
+     "number",
+     "criteria",
+     "feedback"
+    ],
+    "title": "TaskScores",
+    "description": "One task's finished grade: a band on each of the task's four criteria, and feedback."
+   },
+   "TaskScoresDraft-Input": {
+    "properties": {
+     "number": {
+      "type": "integer",
+      "title": "Number"
+     },
+     "criteria": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/CriterionScore-Input"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "propertyNames": {
+       "$ref": "#/components/schemas/Criterion"
+      },
+      "type": "object",
+      "title": "Criteria"
+     },
+     "feedback": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 5000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Feedback"
+     }
+    },
+    "type": "object",
+    "required": [
+     "number",
+     "criteria"
+    ],
+    "title": "TaskScoresDraft",
+    "description": "One task's scores so far; any criterion may still be missing."
+   },
+   "TaskScoresDraft-Output": {
+    "properties": {
+     "number": {
+      "type": "integer",
+      "title": "Number"
+     },
+     "criteria": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/CriterionScore-Output"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "propertyNames": {
+       "$ref": "#/components/schemas/Criterion"
+      },
+      "type": "object",
+      "title": "Criteria"
+     },
+     "feedback": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 5000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Feedback"
+     }
+    },
+    "type": "object",
+    "required": [
+     "number",
+     "criteria"
+    ],
+    "title": "TaskScoresDraft",
+    "description": "One task's scores so far; any criterion may still be missing."
+   },
    "TestListResponse": {
     "properties": {
      "items": {
@@ -2018,6 +2946,32 @@
     ],
     "title": "WritingCriterion"
    },
+   "WritingResult": {
+    "properties": {
+     "tasks": {
+      "items": {
+       "$ref": "#/components/schemas/WritingTask"
+      },
+      "type": "array",
+      "title": "Tasks"
+     },
+     "focus": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Focus",
+      "description": "The changes most likely to lift the band, most important first; plain text \u2014 render as text, never HTML or Markdown"
+     }
+    },
+    "type": "object",
+    "required": [
+     "tasks",
+     "focus"
+    ],
+    "title": "WritingResult",
+    "description": "The AI's feedback on a Writing session, as stored on the assessment and served."
+   },
    "WritingResultView": {
     "properties": {
      "tasks": {
@@ -2043,6 +2997,106 @@
     ],
     "title": "WritingResultView",
     "description": "`WritingResult` as served, with each task's essay text."
+   },
+   "WritingScores": {
+    "properties": {
+     "tasks": {
+      "items": {
+       "$ref": "#/components/schemas/TaskScores"
+      },
+      "type": "array",
+      "title": "Tasks"
+     }
+    },
+    "type": "object",
+    "required": [
+     "tasks"
+    ],
+    "title": "WritingScores",
+    "description": "A submitted Writing grade: one entry per written task; blank tasks are left out."
+   },
+   "WritingScoresDraft-Input": {
+    "properties": {
+     "tasks": {
+      "items": {
+       "$ref": "#/components/schemas/TaskScoresDraft-Input"
+      },
+      "type": "array",
+      "title": "Tasks"
+     }
+    },
+    "type": "object",
+    "required": [
+     "tasks"
+    ],
+    "title": "WritingScoresDraft",
+    "description": "A teacher's private work in progress, saved as they go (spec \u00a75.2 step 5)."
+   },
+   "WritingScoresDraft-Output": {
+    "properties": {
+     "tasks": {
+      "items": {
+       "$ref": "#/components/schemas/TaskScoresDraft-Output"
+      },
+      "type": "array",
+      "title": "Tasks"
+     }
+    },
+    "type": "object",
+    "required": [
+     "tasks"
+    ],
+    "title": "WritingScoresDraft",
+    "description": "A teacher's private work in progress, saved as they go (spec \u00a75.2 step 5)."
+   },
+   "WritingTask": {
+    "properties": {
+     "number": {
+      "type": "integer",
+      "title": "Number"
+     },
+     "band": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Band"
+     },
+     "word_count": {
+      "type": "integer",
+      "title": "Word Count"
+     },
+     "criteria": {
+      "items": {
+       "$ref": "#/components/schemas/WritingCriterion"
+      },
+      "type": "array",
+      "title": "Criteria"
+     },
+     "feedback": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Feedback"
+     }
+    },
+    "type": "object",
+    "required": [
+     "number",
+     "band",
+     "word_count",
+     "criteria"
+    ],
+    "title": "WritingTask"
    },
    "WritingTaskView": {
     "properties": {
@@ -2071,6 +3125,17 @@
       },
       "type": "array",
       "title": "Criteria"
+     },
+     "feedback": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Feedback"
      },
      "text": {
       "type": "string",
@@ -2116,6 +3181,10 @@
   {
    "name": "sessions",
    "description": "Taking a test: start, autosave answers, submit."
+  },
+  {
+   "name": "grading",
+   "description": "Teachers: the grading queue, claims, drafts and grades."
   }
  ]
 }

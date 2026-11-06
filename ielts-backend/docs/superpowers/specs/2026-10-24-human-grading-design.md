@@ -2,7 +2,8 @@
 
 **Date:** 2026-10-24
 **Status:** Approved 2026-10-24. Roles, admin users and band arithmetic implemented
-(plan `2026-10-24-roles-and-admin-users.md`); the grading flow is not built yet.
+(plan `2026-10-24-roles-and-admin-users.md`). Writing teacher grading implemented (plan
+`2026-11-06-teacher-grading-writing.md`); Speaking, admin results/overview and frontend not built.
 **Builds on:** `2026-06-23-backend-foundation-design.md` (single-process monolith)
 
 ---

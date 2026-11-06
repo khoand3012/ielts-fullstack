@@ -69,8 +69,8 @@ ielts-backend/
 - **Question** — typed (multiple_choice, fill_blank, matching, short_answer, essay_task1, essay_task2, speaking_part1/2/3)
 - **TestSession** — a user's attempt at one test version; `mode` (`practice` = no time limit | `exam` = server deadline + 30 s grace), `started_at`, `deadline`, `submitted_at`, status, and `grading_method` (`auto` | `ai` | `human`, fixed at submission). Answers autosave; expired exam sessions are auto-submitted (on the next read/save, and by an in-process loop every minute)
 - **Answer** — user's response to a question; for auto-graded types, scored synchronously (marking rules in `core/services/auto_grading.py`; Reading versions carry a `module`, `academic | general_training`, that picks the band table in `core/services/bands.py`; result at `GET /sessions/{id}/result`); AI-graded Writing points to an `AIAssessment` row; human-graded sessions have a `HumanGrade`
-- **AIAssessment** — Writing only (Academic; General Training later). Band scores per criterion + overall + feedback text; populated asynchronously by an in-process background task; `processing → ready | held | failed` (`held` = suspected manipulation, waiting for an admin). The frontend **polls** the result endpoint, where students only ever see `being_graded → graded` (no SSE/WebSocket in v1)
-- **HumanGrade** — one per human-graded session (all Speaking; Writing on request or after AI failure); `awaiting_grader → claimed → graded`; `origin` ∈ `speaking | student_request | ai_fallback`
+- **AIAssessment** — Writing only (Academic; General Training later). Band scores per criterion + overall + feedback text; populated asynchronously by an in-process background task; `processing → ready | held | failed` (`held` = suspected manipulation, graded by a teacher instead). The frontend **polls** the result endpoint, where students only ever see `being_graded → graded` (no SSE/WebSocket in v1)
+- **HumanGrade** — one per human-graded session (all Speaking; Writing on request, after AI failure, or when the AI grade was held); `awaiting_grader → claimed → graded`; `origin` ∈ `speaking | student_request | ai_fallback | ai_flagged`. The row is the queue entry, the claim, the draft and the grade; a submitted grade is final
 - **Entitlement** — per-user, per-skill daily counter for Writing and Speaking tests (see Freemium)
 
 ## Roles & human grading
@@ -80,7 +80,8 @@ Full design: `docs/superpowers/specs/2026-10-24-human-grading-design.md`.
 - **Roles** — `student` takes tests and sees own results; `teacher` grades from the queue; `admin` does everything a teacher can, sees all results, manages users and claims, and sees the grading overview
 - **Speaking** is always graded by a teacher. **Writing** is graded by AI unless the student sets `request_manual_grading` at submission — then it goes to the teacher queue instead
 - **One shared queue** (oldest first) with an atomic claim so no two teachers grade the same test; drafts are private until the grade is submitted; admins can release or reassign stuck claims
-- **AI failure** — a Writing test whose AI grading fails all 3 attempts drops into the teacher queue (`AI_FAILURE_FALLBACK_TO_TEACHER`, default on) — from phase 8; until then the row stays `failed`, the student keeps seeing "being graded", and `regrade-ai` retries it. Held (flagged) essays join the queue in phase 8 too (origin `ai_flagged`)
+- **AI failure** — a Writing test whose AI grading fails all 3 attempts drops into the teacher queue (`AI_FAILURE_FALLBACK_TO_TEACHER`, default on; off leaves it `failed` for `regrade-ai`). Held (flagged) essays always join the queue (origin `ai_flagged`); the teacher sees the AI draft and the signals
+- **Grading API** — `api/routers/grading.py` (tag `grading`, teachers and admins): queue, mine, detail, claim, release, draft, submit. Admins also get `/admin/grading/{id}/release|reassign`. Logic in `core/services/human_grading.py`; the grade itself is written by `grades.record_human_grade`. `TEACHER_MAX_ACTIVE_CLAIMS` (default 3) caps a teacher's claims
 - **Bands** — criteria in half-band steps (0–9); overall uses the British Council rounding rule (nearest half band, .25/.75 round up); Writing weights Task 2 double. All arithmetic lives in `core/services/bands.py`
 
 ## Conventions
@@ -104,7 +105,7 @@ AI grading covers **Writing only** (Speaking is graded by teachers).
 - The model is called with **structured outputs** (`response_format` JSON schema, or tool calling) to return JSON: per-criterion band scores + overall + feedback bullets; always validate the JSON with Pydantic, and check a new `AI_MODEL` supports structured outputs on OpenRouter before switching
 - Writing: send full text to the model, plus the Task 1 chart image (PNG/JPEG/WebP, inline base64) and the staff-only examiner note (`staff_content.examiner_notes`, by task number) when present. Academic only for now
 - Always store the raw model response alongside the parsed result for debugging and re-evaluation
-- Grading runs as an in-process background task: up to 3 attempts with exponential backoff; on final failure the `AIAssessment` row is marked `failed` with the error stored (phase 8 adds the hand-off to the teacher queue as a `HumanGrade(origin=ai_fallback)`, unless `AI_FAILURE_FALLBACK_TO_TEACHER` is off). A grade that raises any manipulation signal ends `held` (never retried) until an admin releases it with `held-ai release`. Only `ready` writes `test_sessions.band`. Every write of a session's grade (auto score, AI outcome, later teacher grades) goes through `core/services/grades.py`
+- Grading runs as an in-process background task: up to 3 attempts with exponential backoff; on final failure the `AIAssessment` row is marked `failed` with the error stored and handed to the teacher queue as a `HumanGrade(origin=ai_fallback)`, unless `AI_FAILURE_FALLBACK_TO_TEACHER` is off. A grade that raises any manipulation signal ends `held` (never retried) and goes to the teacher queue as `ai_flagged`. Only `ready` writes `test_sessions.band`; once a session has a `HumanGrade`, the teacher's grade is the result. Every write of a session's grade (auto score, AI outcome, teacher grade) goes through `core/services/grades.py`
 - In-process tasks die with the process — on startup, re-run any `AIAssessment` rows stuck in `processing` (never `failed` ones) so a deploy/restart never strands a grading job. This assumes a single machine — revisit (lease/stale threshold or a real worker) before running more than one
 
 ## Security notes
@@ -135,8 +136,7 @@ The product is freemium. Limits apply **only to Writing and Speaking**; Reading/
 - `uv run python -m core.cli set-role <email> <role>` — set a user's role (bootstrap the first admin)
 - `uv run python -m core.cli load-test <file.json> [--publish]` — load a test file (e.g. `seed/tests/practice-01-reading.json`) as a draft, optionally publish it
 - `uv run python -m core.cli regrade-auto [--all]` — score Reading/Listening sessions that have no score (the startup sweep does this on every deploy); `--all` re-scores every session after a marking-rule or band-table change
-- `uv run python -m core.cli regrade-ai` — retry AI grading of every `failed` Writing session (never touches `ready` or `held`)
-- `uv run python -m core.cli held-ai list|show <id>|release <id> --by <admin-email>` — review essays held for suspected manipulation; `release` publishes the AI grade
+- `uv run python -m core.cli regrade-ai` — retry AI grading of every `failed` Writing session (never touches `ready` or `held`, nor a session already handed to the teacher queue)
 - `uv run pytest` — run tests (Docker must be running)
 - `uv run ruff check . && uv run ruff format --check . && uv run mypy .` — lint + format + type check
 
