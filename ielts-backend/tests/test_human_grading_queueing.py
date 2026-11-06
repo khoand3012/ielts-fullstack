@@ -3,13 +3,14 @@
 from collections.abc import Awaitable, Callable
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from core.models import (
     AIAssessment,
     AssessmentStatus,
     HumanGrade,
+    HumanGradeOrigin,
     SessionMode,
     Skill,
     TestSession,
@@ -17,7 +18,7 @@ from core.models import (
 )
 from core.schemas.session import AnswerInput
 from core.services import sessions
-from core.services.ai_grading import GradingRunner, regrade_failed
+from core.services.ai_grading import GradingRunner, queue_stranded, regrade_failed
 from core.settings import get_settings
 from tests.ai_helpers import FakeOpenRouter, completion, model_output
 from tests.helpers import publish_test
@@ -111,3 +112,34 @@ async def test_handed_over_session_is_never_regraded(
     # A retry would reset it to `processing` and the fake would grade it `ready`.
     row, session = await rows(_engine, ts)
     assert (row.status, row.attempts, session.band) == (AssessmentStatus.FAILED, 3, None)
+
+
+async def test_startup_queues_stranded_ai_outcomes(
+    db_session: AsyncSession,
+    _engine: AsyncEngine,
+    make_user: MakeUser,
+    ai_runner: Runner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A held or failed outcome written by code older than the hand-off (e.g. during the
+    deploy that adds it) has no teacher grade; startup queues it."""
+    student, _ = await make_user()
+    held = await graded(db_session, student, ai_runner, AssessmentStatus.HELD)
+    failed = await graded(db_session, student, ai_runner, AssessmentStatus.FAILED)
+    async with async_sessionmaker(_engine)() as db:
+        await db.execute(
+            delete(HumanGrade).where(HumanGrade.test_session_id.in_([held.id, failed.id]))
+        )
+        await db.commit()
+
+    monkeypatch.setattr(get_settings(), "ai_failure_fallback_to_teacher", False)
+    await queue_stranded(async_sessionmaker(_engine))
+    flagged = await queued(_engine, held)
+    assert flagged is not None and flagged.origin == HumanGradeOrigin.AI_FLAGGED
+    assert await queued(_engine, failed) is None  # fallback off: stays failed for regrade-ai
+
+    monkeypatch.setattr(get_settings(), "ai_failure_fallback_to_teacher", True)
+    await queue_stranded(async_sessionmaker(_engine))
+    fallback = await queued(_engine, failed)
+    assert fallback is not None and fallback.origin == HumanGradeOrigin.AI_FALLBACK
+    assert await queue_stranded(async_sessionmaker(_engine)) == 0

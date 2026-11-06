@@ -14,9 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.ai.injection import clean_essay, word_count
 from core.exceptions import (
+    AlreadyClaimedError,
+    AlreadyGradedError,
     AppError,
+    ClaimLimitError,
     ConflictError,
     ForbiddenError,
+    NotClaimedError,
     NotFoundError,
     ValidationAppError,
 )
@@ -137,10 +141,10 @@ async def refusal(db: AsyncSession, grade_id: uuid.UUID, user_id: uuid.UUID) -> 
         return NotFoundError("grade not found")
     status, claimed_by = row
     if status == HumanGradeStatus.GRADED:
-        return ConflictError("this test is already graded")
+        return AlreadyGradedError("this test is already graded")
     if claimed_by != user_id:
         return ForbiddenError("this test is not claimed by you")
-    return ConflictError("this test is not claimed")
+    return NotClaimedError("this test is not claimed")
 
 
 async def claim(
@@ -166,7 +170,7 @@ async def claim(
     )
     limit = get_settings().teacher_max_active_claims
     if (active or 0) >= limit:
-        raise ConflictError(f"you already hold {limit} claims; grade or release one first")
+        raise ClaimLimitError(f"you already hold {limit} claims; grade or release one first")
     claimed = await db.scalar(
         update(HumanGrade)
         .where(HumanGrade.id == grade_id, HumanGrade.status == HumanGradeStatus.AWAITING_GRADER)
@@ -174,7 +178,10 @@ async def claim(
         .returning(HumanGrade.id)
     )
     if claimed is None:
-        raise ConflictError("this test is already claimed")
+        status = await db.scalar(select(HumanGrade.status).where(HumanGrade.id == grade_id))
+        if status == HumanGradeStatus.GRADED:
+            raise AlreadyGradedError("this test is already graded")
+        raise AlreadyClaimedError("this test is already claimed")
     await db.commit()
     log.info("human_grading_claimed", grade_id=str(grade_id), by=str(teacher.id))
     return await get_item(db, grade_id)
@@ -336,8 +343,9 @@ async def admin_release(db: AsyncSession, admin: User, grade_id: uuid.UUID) -> N
         .returning(HumanGrade.id)
     )
     if released is None:
-        await _grade(db, grade_id)
-        raise ConflictError("this test is not claimed")
+        if (await _grade(db, grade_id)).status == HumanGradeStatus.GRADED:
+            raise AlreadyGradedError("this test is already graded")
+        raise NotClaimedError("this test is not claimed")
     await db.commit()
     log.info("human_grading_released", grade_id=str(grade_id), by=str(admin.id))
 
@@ -370,7 +378,7 @@ async def reassign(
         .returning(HumanGrade.id)
     )
     if moved is None:
-        raise ConflictError("this test is already graded")
+        raise AlreadyGradedError("this test is already graded")
     await db.commit()
     log.info(
         "human_grading_reassigned",

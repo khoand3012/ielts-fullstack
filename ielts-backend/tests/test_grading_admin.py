@@ -45,7 +45,7 @@ async def test_admin_releases_any_claim(
         None,
     )
     again = await app_client.post(f"/admin/grading/{grade.id}/release", headers=h(admin))
-    assert again.status_code == 409  # no longer claimed
+    assert (again.status_code, again.json()["error"]["code"]) == (409, "not_claimed")
 
 
 async def test_admin_release_unknown_grade(app_client: AsyncClient, make_user: MakeUser) -> None:

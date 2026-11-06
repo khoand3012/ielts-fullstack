@@ -141,7 +141,8 @@ async def test_grade_is_final(
     assert (await app_client.post(url, json=BOTH, headers=h(tok))).status_code == 204
 
     changed = {"tasks": [scores(1, (9, 9, 9, 9)), scores(2, (9, 9, 9, 9))]}
-    assert (await app_client.post(url, json=changed, headers=h(tok))).status_code == 409
+    again = await app_client.post(url, json=changed, headers=h(tok))
+    assert (again.status_code, again.json()["error"]["code"]) == (409, "already_graded")
     async with async_sessionmaker(_engine)() as db:
         band = await db.scalar(select(HumanGrade.overall_band).where(HumanGrade.id == grade.id))
     assert band == Decimal("6.5")

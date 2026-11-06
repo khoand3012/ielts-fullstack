@@ -118,6 +118,8 @@ async def test_claim_race_one_winner(
     )
 
     assert sorted([a.status_code, b.status_code]) == [200, 409]
+    loser = a if a.status_code == 409 else b
+    assert loser.json()["error"]["code"] == "already_claimed"
 
 
 async def test_claim_limit(
@@ -133,12 +135,10 @@ async def test_claim_limit(
         await grade_of(_engine, (await requested(db_session, make_user))[0]) for _ in range(3)
     ]
 
-    codes = [
-        (await app_client.post(f"/grading/{g.id}/claim", headers=h(tok))).status_code
-        for g in grades
-    ]
+    responses = [await app_client.post(f"/grading/{g.id}/claim", headers=h(tok)) for g in grades]
 
-    assert codes == [200, 200, 409]
+    assert [r.status_code for r in responses] == [200, 200, 409]
+    assert responses[2].json()["error"]["code"] == "claim_limit"
 
 
 async def test_claim_limit_holds_under_concurrent_claims(
@@ -213,3 +213,21 @@ async def test_release_unclaimed_conflict(
     grade = await grade_of(_engine, ts)
     resp = await app_client.post(f"/grading/{grade.id}/release", headers=h(tok))
     assert resp.status_code == 403  # not claimed by the caller (claimed_by is null)
+
+
+async def test_claim_graded_test_says_graded(
+    app_client: AsyncClient, db_session: AsyncSession, _engine: AsyncEngine, make_user: MakeUser
+) -> None:
+    _, tok = await make_user(Role.TEACHER)
+    ts, _, _ = await requested(db_session, make_user)
+    grade = await grade_of(_engine, ts)
+    async with async_sessionmaker(_engine)() as db:
+        await db.execute(
+            update(HumanGrade).where(HumanGrade.id == grade.id).values(status="graded")
+        )
+        await db.commit()
+
+    resp = await app_client.post(f"/grading/{grade.id}/claim", headers=h(tok))
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "already_graded"

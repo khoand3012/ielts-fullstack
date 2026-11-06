@@ -41,6 +41,7 @@ from core.models import (
     Answer,
     AssessmentStatus,
     HumanGrade,
+    HumanGradeOrigin,
     SessionMode,
     SignalSource,
     Skill,
@@ -401,6 +402,42 @@ async def resume_processing(runner: GradingRunner) -> int:
     _schedule(runner, ids)
     log.info("ai_resume_scheduled", count=len(ids))
     return len(ids)
+
+
+async def queue_stranded(factory: async_sessionmaker[AsyncSession]) -> int:
+    """Hand to the teacher queue every `held` assessment, and every `failed` one while
+    `ai_failure_fallback_to_teacher` is on, that has no teacher grade: an outcome written by
+    code older than the hand-off (e.g. during the deploy that added it) would otherwise wait
+    forever. Idempotent; returns how many it queued; never raises."""
+    fallback = get_settings().ai_failure_fallback_to_teacher
+    statuses = [AssessmentStatus.HELD] + ([AssessmentStatus.FAILED] if fallback else [])
+    has_grade = select(HumanGrade.id).where(
+        HumanGrade.test_session_id == AIAssessment.test_session_id
+    )
+    origins = {
+        AssessmentStatus.HELD: HumanGradeOrigin.AI_FLAGGED,
+        AssessmentStatus.FAILED: HumanGradeOrigin.AI_FALLBACK,
+    }
+    try:
+        async with factory() as db:
+            rows = (
+                await db.execute(
+                    select(AIAssessment.test_session_id, AIAssessment.status).where(
+                        AIAssessment.status.in_(statuses), ~has_grade.exists()
+                    )
+                )
+            ).tuples()
+            queued = 0
+            for session_id, status in list(rows):
+                origin = origins[AssessmentStatus(status)]
+                queued += await grades.enqueue_human(db, session_id, Skill.WRITING, origin)
+            await db.commit()
+    except Exception:
+        log.exception("ai_queue_stranded_failed")
+        return 0
+    if queued:
+        log.info("ai_stranded_queued", count=queued)
+    return queued
 
 
 @dataclass(frozen=True)
