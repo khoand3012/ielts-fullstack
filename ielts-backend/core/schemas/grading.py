@@ -123,3 +123,7 @@ class GradeDetail(QueueItem):
     draft: WritingScoresDraft | None
     # only for `ai_flagged`
     ai: AIDraft | None
+
+
+class ReassignRequest(BaseModel):
+    teacher_id: uuid.UUID

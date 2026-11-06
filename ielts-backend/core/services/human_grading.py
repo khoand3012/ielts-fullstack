@@ -322,3 +322,61 @@ async def submit(
         by=str(teacher.id),
         band=str(bands.overall) if bands.overall is not None else None,
     )
+
+
+async def admin_release(db: AsyncSession, admin: User, grade_id: uuid.UUID) -> None:
+    """Return anyone's claim to the queue; the draft is discarded (spec §5.3). 409 unless
+    the grade is claimed. Commits."""
+    released = await db.scalar(
+        update(HumanGrade)
+        .where(HumanGrade.id == grade_id, HumanGrade.status == HumanGradeStatus.CLAIMED)
+        .values(
+            status=HumanGradeStatus.AWAITING_GRADER, claimed_by=None, claimed_at=None, scores=None
+        )
+        .returning(HumanGrade.id)
+    )
+    if released is None:
+        await _grade(db, grade_id)
+        raise ConflictError("this test is not claimed")
+    await db.commit()
+    log.info("human_grading_released", grade_id=str(grade_id), by=str(admin.id))
+
+
+async def reassign(
+    db: AsyncSession,
+    admin: User,
+    grade_id: uuid.UUID,
+    teacher_id: uuid.UUID,
+    now: datetime | None = None,
+) -> QueueItem:
+    """Give an ungraded test to `teacher_id`, claimed or not; any draft goes with it, and the
+    claim limit does not apply (spec §5.3). 404 unknown grade or user, 409 the user is not a
+    teacher or admin or the test is graded, 403 the user is the test's student. Commits."""
+    grade = await _grade(db, grade_id)
+    target = await db.get(User, teacher_id)
+    if target is None:
+        raise NotFoundError("user not found")
+    if target.role not in (Role.TEACHER, Role.ADMIN):
+        raise ConflictError("only a teacher or an admin can be given a test to grade")
+    owner = await db.scalar(
+        select(TestSession.user_id).where(TestSession.id == grade.test_session_id)
+    )
+    if owner == teacher_id:
+        raise ForbiddenError("a student cannot grade their own test")
+    moved = await db.scalar(
+        update(HumanGrade)
+        .where(HumanGrade.id == grade_id, HumanGrade.status != HumanGradeStatus.GRADED)
+        .values(status=HumanGradeStatus.CLAIMED, claimed_by=teacher_id, claimed_at=_now(now))
+        .returning(HumanGrade.id)
+    )
+    if moved is None:
+        raise ConflictError("this test is already graded")
+    await db.commit()
+    log.info(
+        "human_grading_reassigned",
+        grade_id=str(grade_id),
+        by=str(admin.id),
+        to=str(teacher_id),
+        previous=str(grade.claimed_by) if grade.claimed_by else None,
+    )
+    return await get_item(db, grade_id)

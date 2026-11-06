@@ -1,12 +1,13 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, status
 
 from api.deps import AdminUser, DbSession
 from core.models import Role
+from core.schemas.grading import QueueItem, ReassignRequest
 from core.schemas.user import UserListResponse, UserRead, UserUpdateRequest
-from core.services import users
+from core.services import human_grading, users
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -32,3 +33,21 @@ async def update_user(
         session, actor=admin, user_id=user_id, role=body.role, plan=body.plan
     )
     return UserRead.model_validate(user)
+
+
+@router.post(
+    "/grading/{grade_id}/release",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="admin_grading_release",
+)
+async def release_claim(grade_id: uuid.UUID, admin: AdminUser, session: DbSession) -> None:
+    await human_grading.admin_release(session, admin, grade_id)
+
+
+@router.post(
+    "/grading/{grade_id}/reassign", response_model=QueueItem, operation_id="admin_grading_reassign"
+)
+async def reassign_claim(
+    grade_id: uuid.UUID, body: ReassignRequest, admin: AdminUser, session: DbSession
+) -> QueueItem:
+    return await human_grading.reassign(session, admin, grade_id, body.teacher_id)
