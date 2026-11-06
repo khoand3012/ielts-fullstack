@@ -2,6 +2,7 @@ import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal as D
 
 import pytest
 from asgi_lifespan import LifespanManager
@@ -11,11 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from core.models import AIAssessment, AssessmentStatus, SessionMode, Skill, TestSession, User
 from core.schemas.session import AnswerInput
 from core.services import ai_grading, sessions
-from core.services.ai_grading import GradingRunner, resume_processing
+from core.services.ai_grading import GradingRunner, regrade_failed, resume_processing
 from core.settings import get_settings
 from tests.ai_helpers import FakeOpenRouter, completion, model_output
 from tests.helpers import publish_test
-from tests.test_ai_grading import BOTH, RecordingLog
+from tests.test_ai_grading import BOTH, RecordingLog, graded, rows
 
 MakeUser = Callable[..., Awaitable[tuple[User, str]]]
 Runner = tuple[GradingRunner, FakeOpenRouter]
@@ -223,3 +224,34 @@ async def test_lifespan_skips_when_disabled(monkeypatch: pytest.MonkeyPatch) -> 
     async with LifespanManager(api.main.create_app()):
         assert ai_grading.installed() is not None
     assert resumed == []
+
+
+async def test_regrade_failed_only(
+    db_session: AsyncSession,
+    _engine: AsyncEngine,
+    make_user: MakeUser,
+    ai_runner: Runner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # With the fallback on, a failed essay goes to a teacher and is never retried
+    # (test_human_grading_queueing); with it off, regrade-ai still retries it.
+    monkeypatch.setattr(get_settings(), "ai_failure_fallback_to_teacher", False)
+    runner, fake = ai_runner
+    user, _ = await make_user()
+    failed = await graded(db_session, user, ai_runner, AssessmentStatus.FAILED)
+    ready = await graded(db_session, user, ai_runner, AssessmentStatus.READY)
+    held = await graded(db_session, user, ai_runner, AssessmentStatus.HELD)
+    before = {ts.id: (await rows(_engine, ts))[0] for ts in (ready, held)}
+    fake.requests.clear()
+    # Other tests' failed rows are retried too; answer them all.
+    fake.default = completion(model_output())
+
+    counts = await regrade_failed(runner)
+
+    assert counts.ready >= 1
+    row, session = await rows(_engine, failed)
+    assert row.status == AssessmentStatus.READY and row.error is None
+    assert row.attempts == 1 and session.band == D("6.0")
+    for ts in (ready, held):
+        after, _ = await rows(_engine, ts)
+        assert (after.status, after.updated_at) == (before[ts.id].status, before[ts.id].updated_at)

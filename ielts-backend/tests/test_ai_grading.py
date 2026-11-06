@@ -83,6 +83,23 @@ async def submitted(
     return ts
 
 
+async def graded(
+    db: AsyncSession,
+    user: User,
+    runner: tuple[GradingRunner, FakeOpenRouter],
+    status: AssessmentStatus,
+) -> TestSession:
+    """A Writing session graded to `status` (ready, held or failed)."""
+    ts = await submitted(db, user, BOTH)
+    _, fake = runner
+    if status == AssessmentStatus.FAILED:
+        fake.responses = [completion("not json")] * 3
+    else:
+        fake.responses = [completion(model_output(manipulation=status == AssessmentStatus.HELD))]
+    assert await grade_session(runner[0], ts.id) == status
+    return ts
+
+
 async def rows(engine: AsyncEngine, ts: TestSession) -> tuple[AIAssessment, TestSession]:
     async with async_sessionmaker(engine, expire_on_commit=False)() as db:
         assessment = await db.scalar(

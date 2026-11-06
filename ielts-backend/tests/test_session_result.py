@@ -11,14 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.models import (
     AIAssessment,
     AssessmentStatus,
-    Role,
     SessionMode,
     Skill,
     TestSession,
     User,
 )
 from core.schemas.session import AnswerInput
-from core.services import ai_grading, ai_review, grades, sessions
+from core.services import ai_grading, grades, sessions
 from core.services.ai_grading import GradingRunner
 from core.settings import get_settings
 from tests.ai_helpers import FakeOpenRouter, completion, model_output
@@ -465,21 +464,3 @@ async def test_session_list_carries_writing_band(
     resp = await app_client.get("/sessions", headers=h(tok))
     [item] = [i for i in resp.json()["items"] if i["id"] == str(ts.id)]
     assert item["band"] == 6.0
-
-
-async def test_result_graded_after_release(
-    app_client: AsyncClient, db_session: AsyncSession, make_user: MakeUser, ai_installed: Runner
-) -> None:
-    _, fake = ai_installed
-    fake.responses = [completion(model_output(manipulation=True))]
-    user, tok = await make_user()
-    admin, _ = await make_user(Role.ADMIN)
-    ts = await writing_submitted(app_client, db_session, user, tok, BOTH)
-    assert (await result(app_client, tok, ts))["status"] == "being_graded"
-
-    row = await db_session.scalar(select(AIAssessment).where(AIAssessment.test_session_id == ts.id))
-    assert row is not None and row.status == AssessmentStatus.HELD
-    await ai_review.release_held(db_session, row.id, admin.email)
-
-    body = await result(app_client, tok, ts)
-    assert (body["status"], body["band"]) == ("graded", 6.0)

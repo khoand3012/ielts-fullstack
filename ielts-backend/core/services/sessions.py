@@ -22,6 +22,7 @@ from core.models import (
     Answer,
     AssessmentStatus,
     GradingMethod,
+    HumanGradeOrigin,
     SessionMode,
     SessionStatus,
     Skill,
@@ -375,12 +376,15 @@ async def set_manual_grading(
 async def on_session_submitted(db: AsyncSession, ts: TestSession) -> None:
     """Runs once per submitted session, inside the submitting transaction. Reading and
     Listening are scored here; AI-graded Writing gets its assessment row, graded once the
-    transaction commits (see `_submit`); the human grading phase hooks in here too."""
+    transaction commits (see `_submit`); Writing that asked for a teacher joins the teacher
+    queue. Speaking cannot be started yet, so it never gets here."""
     if ts.grading_method == GradingMethod.AI:
         db.add(AIAssessment(test_session_id=ts.id))
         return
     if ts.grading_method == GradingMethod.AUTO:
         await grades.record_auto_score(db, ts)
+    elif ts.grading_method == GradingMethod.HUMAN and ts.skill == Skill.WRITING:
+        await grades.enqueue_human(db, ts.id, Skill.WRITING, HumanGradeOrigin.STUDENT_REQUEST)
 
 
 _GRADING_METHOD = case(

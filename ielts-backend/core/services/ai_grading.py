@@ -41,6 +41,7 @@ from core.models import (
     AIAssessment,
     Answer,
     AssessmentStatus,
+    HumanGrade,
     SessionMode,
     SignalSource,
     Skill,
@@ -448,12 +449,16 @@ class RegradeCounts:
 
 async def regrade_failed(runner: GradingRunner) -> RegradeCounts:
     """Retry every `failed` assessment from scratch (spec §7.4), one at a time. `ready` and
-    `held` rows are never touched."""
+    `held` rows are never touched, nor a failed one already handed to a teacher (human grading
+    spec §4.1: once handed over, AI never touches it again)."""
+    handed_over = select(HumanGrade.id).where(
+        HumanGrade.test_session_id == AIAssessment.test_session_id
+    )
     async with runner.factory() as db:
         ids = list(
             await db.scalars(
                 update(AIAssessment)
-                .where(AIAssessment.status == AssessmentStatus.FAILED)
+                .where(AIAssessment.status == AssessmentStatus.FAILED, ~handed_over.exists())
                 .values(
                     status=AssessmentStatus.PROCESSING, attempts=0, error=None, completed_at=None
                 )
