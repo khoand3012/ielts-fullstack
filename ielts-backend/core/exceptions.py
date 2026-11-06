@@ -28,6 +28,30 @@ class SessionClosedError(ConflictError):
     code = "session_closed"
 
 
+class AlreadyClaimedError(ConflictError):
+    """Another teacher claimed this test first."""
+
+    code = "already_claimed"
+
+
+class AlreadyGradedError(ConflictError):
+    """The test has its final teacher grade; nothing about it can change."""
+
+    code = "already_graded"
+
+
+class NotClaimedError(ConflictError):
+    """The test is waiting in the queue, so there is no claim to act on."""
+
+    code = "not_claimed"
+
+
+class ClaimLimitError(ConflictError):
+    """The teacher already holds `teacher_max_active_claims` claims."""
+
+    code = "claim_limit"
+
+
 class AuthError(AppError):
     status_code = 401
     code = "unauthorized"

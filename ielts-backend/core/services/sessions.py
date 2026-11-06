@@ -11,6 +11,7 @@ from sqlalchemy import ColumnElement, and_, case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from core.ai.injection import clean_essay, word_count
 from core.exceptions import (
     ConflictError,
     NotFoundError,
@@ -22,6 +23,9 @@ from core.models import (
     Answer,
     AssessmentStatus,
     GradingMethod,
+    HumanGrade,
+    HumanGradeOrigin,
+    HumanGradeStatus,
     SessionMode,
     SessionStatus,
     Skill,
@@ -31,14 +35,19 @@ from core.models import (
     TestVersion,
     User,
 )
+from core.schemas.grading import WritingScores
 from core.schemas.session import (
     AnswerInput,
     ResultSection,
+    WritingComment,
+    WritingCriterion,
     WritingResult,
     WritingResultView,
+    WritingTask,
     WritingTaskView,
 )
 from core.services import ai_grading, auto_grading, catalog, grades, storage
+from core.services.bands import TASK_CRITERIA, blank_writing_task, writing_bands
 from core.services.content import ItemSpec, item_index, section_titles
 from core.services.entitlements import check_and_consume
 from core.settings import get_settings
@@ -146,7 +155,7 @@ async def get_result(
     ts = await get_session(db, user, session_id, now)
     if ts.status == SessionStatus.IN_PROGRESS:
         raise ConflictError("session is not submitted yet")
-    if ts.grading_method == GradingMethod.AI:
+    if ts.skill == Skill.WRITING:
         stored = await _writing_result(db, ts)
         view = _with_essays(stored, await get_answers(db, ts)) if stored is not None else None
         return ResultData(ts, None, view, None)
@@ -184,8 +193,24 @@ def _with_essays(result: WritingResult, answers: dict[int, Any]) -> WritingResul
 
 
 async def _writing_result(db: AsyncSession, ts: TestSession) -> WritingResult | None:
-    """The AI feedback, only once `ready`: held, failed and processing all look the same to
-    the student."""
+    """The grade, once there is one. A session in the teacher queue is graded only when the
+    teacher submits (claims and drafts are invisible), whatever the AI did; otherwise the AI
+    feedback, only once `ready`: held, failed and processing all look the same to the
+    student."""
+    human = (
+        await db.execute(
+            select(HumanGrade.status, HumanGrade.scores).where(HumanGrade.test_session_id == ts.id)
+        )
+    ).first()
+    if human is not None:
+        status, scores = human
+        if status != HumanGradeStatus.GRADED:
+            return None
+        return _teacher_result(
+            SessionMode(ts.mode), WritingScores.model_validate(scores), await get_answers(db, ts)
+        )
+    if ts.grading_method != GradingMethod.AI:
+        return None
     stored = await db.scalar(
         select(AIAssessment.result).where(
             AIAssessment.test_session_id == ts.id,
@@ -193,6 +218,47 @@ async def _writing_result(db: AsyncSession, ts: TestSession) -> WritingResult | 
         )
     )
     return WritingResult.model_validate(stored) if stored is not None else None
+
+
+def _teacher_result(
+    mode: SessionMode, scores: WritingScores, answers: dict[int, Any]
+) -> WritingResult:
+    """A teacher's grade in the shape the AI's feedback is served in."""
+    graded = {t.number: t for t in scores.tasks}
+    tasks = []
+    for number, names in TASK_CRITERIA.items():
+        task = graded.get(number)
+        if task is None:
+            tasks.append(blank_writing_task(number, mode))
+            continue
+        essay = answers.get(number)
+        text = essay if isinstance(essay, str) else ""
+        criteria = [
+            WritingCriterion(
+                criterion=name,
+                band=task.criteria[name].band,
+                comments=[WritingComment(comment=comment, quote=None, suggestion=None, kind=None)]
+                if (comment := task.criteria[name].comment)
+                else [],
+            )
+            for name in names
+        ]
+        tasks.append(
+            WritingTask(
+                number=number,
+                band=None,
+                word_count=word_count(clean_essay(text).text),
+                criteria=criteria,
+                feedback=task.feedback,
+            )
+        )
+    bands = writing_bands(
+        mode,
+        {t.number: [c.band for c in t.criteria] if t.number in graded else None for t in tasks},
+    )
+    per_task = {1: bands.task1, 2: bands.task2}
+    tasks = [t.model_copy(update={"band": per_task[t.number]}) for t in tasks]
+    return WritingResult(tasks=tasks, focus=[])
 
 
 async def list_sessions(
@@ -375,12 +441,15 @@ async def set_manual_grading(
 async def on_session_submitted(db: AsyncSession, ts: TestSession) -> None:
     """Runs once per submitted session, inside the submitting transaction. Reading and
     Listening are scored here; AI-graded Writing gets its assessment row, graded once the
-    transaction commits (see `_submit`); the human grading phase hooks in here too."""
+    transaction commits (see `_submit`); Writing that asked for a teacher joins the teacher
+    queue. Speaking cannot be started yet, so it never gets here."""
     if ts.grading_method == GradingMethod.AI:
         db.add(AIAssessment(test_session_id=ts.id))
         return
     if ts.grading_method == GradingMethod.AUTO:
         await grades.record_auto_score(db, ts)
+    elif ts.grading_method == GradingMethod.HUMAN and ts.skill == Skill.WRITING:
+        await grades.enqueue_human(db, ts.id, Skill.WRITING, HumanGradeOrigin.STUDENT_REQUEST)
 
 
 _GRADING_METHOD = case(

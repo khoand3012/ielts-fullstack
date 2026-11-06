@@ -6,7 +6,6 @@ from typing import Any
 import pytest
 
 from core.ai.output import (
-    TASK_CRITERIA,
     ModelComment,
     ModelCriterion,
     ModelTask,
@@ -15,6 +14,7 @@ from core.ai.output import (
     parse_output,
 )
 from core.models import CommentKind, Criterion
+from core.services.bands import TASK_CRITERIA
 from tests.ai_helpers import completion, model_output
 
 

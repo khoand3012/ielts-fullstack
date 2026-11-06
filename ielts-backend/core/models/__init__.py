@@ -6,6 +6,8 @@ from core.models.enums import (
     CommentKind,
     Criterion,
     GradingMethod,
+    HumanGradeOrigin,
+    HumanGradeStatus,
     Module,
     SessionMode,
     SessionStatus,
@@ -14,6 +16,7 @@ from core.models.enums import (
     SubmitReason,
     VersionStatus,
 )
+from core.models.human_grade import HumanGrade
 from core.models.refresh_token import RefreshToken
 from core.models.session import Answer, TestSession
 from core.models.test import Test, TestVersion
@@ -28,6 +31,9 @@ __all__ = [
     "Criterion",
     "DailyUsage",
     "GradingMethod",
+    "HumanGrade",
+    "HumanGradeOrigin",
+    "HumanGradeStatus",
     "Module",
     "Plan",
     "RefreshToken",

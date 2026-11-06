@@ -8,8 +8,18 @@ Domain terms shared by `ielts-backend/` and `ielts-frontend/`. Use these names i
 
 **Grade recording** — the backend module (`core/services/grades.py`) that is the only code writing a session's grade:
 - **auto score** — marks a Reading/Listening session and stores its score. If marking throws, the session stays unscored and the startup sweep retries it.
-- **AI outcome** — moves an AI assessment out of the status it is expected to be in (`processing` when grading finishes, `held` when an admin releases it). Only a `ready` outcome gives the session its band.
-- Teacher grades will be recorded here too (phase 8).
+- **AI outcome** — moves an AI assessment out of the status it is expected to be in (`processing` when grading finishes). Only a `ready` outcome gives the session its band; `held`, and `failed` while `AI_FAILURE_FALLBACK_TO_TEACHER` is on, hand the session to the grading queue.
+- **teacher grade** — writes the claiming teacher's grade and the session's band, once.
+
+**Teacher grade** (`HumanGrade`) — one row per session a teacher grades. It is at once the queue entry, the claim, the private draft and the final grade: `awaiting_grader → claimed → graded`. A submitted grade is final.
+
+**Grading queue** — every teacher grade still `awaiting_grader`, oldest submission first. A test handed over after AI failure keeps the place its submission time gives it.
+
+**Claim** — a teacher taking a test from the queue to grade. Atomic, so no two teachers grade the same test; a teacher holds at most `TEACHER_MAX_ACTIVE_CLAIMS` at once, never their own test. Releasing a claim discards its draft; an admin can release or reassign anyone's claim (a reassigned draft moves with it).
+
+**Origin** — why a test is in the grading queue: `student_request` (the student asked for a teacher), `ai_fallback` (AI grading failed; shown as "AI failed"), `ai_flagged` (a flagged essay) or `speaking`.
+
+**Flagged essay** — a Writing grade the AI finished but held (`held`) because of a manipulation signal. A teacher grades it; they see the AI's draft and the signals, the student never does.
 
 **Marking failure** — marking a Reading/Listening session throws, for example because of a bug in the marking rules or an answer key the code cannot read. It never blocks a submission.
 

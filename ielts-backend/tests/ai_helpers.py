@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from core.ai.output import TASK_CRITERIA
+from core.services.bands import TASK_CRITERIA
 
 
 def task_output(

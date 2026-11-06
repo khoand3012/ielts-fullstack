@@ -5,23 +5,31 @@ and `band`).
   marking failure is logged and leaves the session unscored; the startup sweep retries.
 - Writing graded by AI: `record_ai_outcome` moves an assessment out of the status it is
   expected to be in; only a `ready` outcome gives the session its band, taken from the
-  assessment row itself.
-- Human grading (phase 8) records teacher grades here too.
+  assessment row itself. A `held` outcome, and a `failed` one unless
+  `ai_failure_fallback_to_teacher` is off, hands the session to the teacher queue.
+- Teacher grading: `enqueue_human` puts a session in the teacher queue (once, however often
+  it is called); `record_human_grade` writes the claiming teacher's grade and gives the
+  session its band. A grade is final: it is written once.
 
 Nothing here commits: callers own their transactions.
 """
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 import structlog
 from sqlalchemy import ColumnElement, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models import (
     AIAssessment,
     Answer,
     AssessmentStatus,
+    HumanGrade,
+    HumanGradeOrigin,
+    HumanGradeStatus,
     Module,
     SessionMode,
     Skill,
@@ -29,7 +37,9 @@ from core.models import (
     TestVersion,
 )
 from core.services import auto_grading, catalog
+from core.services.bands import WritingBands
 from core.services.content import item_index
+from core.settings import get_settings
 
 log = structlog.get_logger()
 
@@ -95,6 +105,60 @@ async def record_ai_outcome(
     if moved is None:
         return None
     session_id, band = moved
-    if values["status"] == AssessmentStatus.READY:
+    status = values["status"]
+    if status == AssessmentStatus.READY:
         await db.execute(update(TestSession).where(TestSession.id == session_id).values(band=band))
+    elif status == AssessmentStatus.HELD:
+        await enqueue_human(db, session_id, Skill.WRITING, HumanGradeOrigin.AI_FLAGGED)
+    elif status == AssessmentStatus.FAILED and get_settings().ai_failure_fallback_to_teacher:
+        await enqueue_human(db, session_id, Skill.WRITING, HumanGradeOrigin.AI_FALLBACK)
+    return session_id
+
+
+async def enqueue_human(
+    db: AsyncSession, session_id: uuid.UUID, skill: Skill, origin: HumanGradeOrigin
+) -> bool:
+    """Put a session in the teacher queue; False if it is already there (or was graded)."""
+    inserted = await db.scalar(
+        insert(HumanGrade)
+        .values(test_session_id=session_id, skill=skill, origin=origin)
+        .on_conflict_do_nothing(index_elements=[HumanGrade.test_session_id])
+        .returning(HumanGrade.id)
+    )
+    if inserted is not None:
+        log.info("human_grading_queued", session_id=str(session_id), origin=str(origin))
+    return inserted is not None
+
+
+async def record_human_grade(
+    db: AsyncSession,
+    grade_id: uuid.UUID,
+    teacher_id: uuid.UUID,
+    scores: dict[str, Any],
+    bands: WritingBands,
+    now: datetime,
+) -> uuid.UUID | None:
+    """Write a teacher's grade, only if `teacher_id` still holds the claim, and set the
+    session's band to the overall. Returns the session id, or `None` if nothing moved."""
+    session_id = await db.scalar(
+        update(HumanGrade)
+        .where(
+            HumanGrade.id == grade_id,
+            HumanGrade.status == HumanGradeStatus.CLAIMED,
+            HumanGrade.claimed_by == teacher_id,
+        )
+        .values(
+            status=HumanGradeStatus.GRADED,
+            scores=scores,
+            overall_band=bands.overall,
+            graded_by=teacher_id,
+            graded_at=now,
+        )
+        .returning(HumanGrade.test_session_id)
+    )
+    if session_id is None:
+        return None
+    await db.execute(
+        update(TestSession).where(TestSession.id == session_id).values(band=bands.overall)
+    )
     return session_id

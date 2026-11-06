@@ -8,7 +8,7 @@ run leaves the row `processing` for the next startup to pick up.
 
 import asyncio
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -29,7 +29,6 @@ from core.ai.injection import (
 )
 from core.ai.messages import TaskInput, build_request
 from core.ai.output import (
-    TASK_CRITERIA,
     ModelOutput,
     ModelTask,
     OutputError,
@@ -41,6 +40,8 @@ from core.models import (
     AIAssessment,
     Answer,
     AssessmentStatus,
+    HumanGrade,
+    HumanGradeOrigin,
     SessionMode,
     SignalSource,
     Skill,
@@ -50,38 +51,11 @@ from core.models import (
 from core.schemas.content import WritingContent
 from core.schemas.session import WritingComment, WritingCriterion, WritingResult, WritingTask
 from core.services import catalog, grades, storage
-from core.services.bands import task_band, writing_overall
+from core.services.bands import blank_writing_task, writing_bands
 from core.services.content import RASTER_IMAGE_EXTENSIONS
 from core.settings import get_settings
 
 log = structlog.get_logger()
-
-_ZEROS = (Decimal(0),) * 4
-
-
-@dataclass(frozen=True)
-class WritingBands:
-    task1: Decimal | None
-    task2: Decimal | None
-    overall: Decimal | None
-
-
-def writing_bands(
-    mode: SessionMode, criteria: Mapping[int, Sequence[Decimal] | None]
-) -> WritingBands:
-    """Task and overall bands; `None` criteria mean a blank task. In an exam a blank task
-    scores 0 and the overall is always given; in practice it isn't graded, and the overall
-    needs both tasks."""
-    filled = {
-        n: (list(_ZEROS) if c is None and mode == SessionMode.EXAM else c)
-        for n, c in ((n, criteria.get(n)) for n in (1, 2))
-    }
-    t1, t2 = filled[1], filled[2]
-    return WritingBands(
-        task1=task_band(t1) if t1 is not None else None,
-        task2=task_band(t2) if t2 is not None else None,
-        overall=writing_overall(t1, t2) if t1 is not None and t2 is not None else None,
-    )
 
 
 @dataclass
@@ -257,15 +231,6 @@ def _graded_task(number: int, task: ModelTask, words: int) -> tuple[WritingTask,
     return WritingTask(number=number, band=None, word_count=words, criteria=criteria), bands
 
 
-def _blank_task(number: int, mode: SessionMode) -> WritingTask:
-    criteria = (
-        [WritingCriterion(criterion=c, band=Decimal(0), comments=[]) for c in TASK_CRITERIA[number]]
-        if mode == SessionMode.EXAM
-        else []
-    )
-    return WritingTask(number=number, band=None, word_count=0, criteria=criteria)
-
-
 async def _finish(runner: GradingRunner, session_id: uuid.UUID, values: dict[str, Any]) -> bool:
     """The outcome, written only if the row is still `processing` (see `grades`)."""
     async with runner.factory() as db:
@@ -315,7 +280,7 @@ async def grade_session(runner: GradingRunner, session_id: uuid.UUID) -> Assessm
             if output is not None and number in graded:
                 model_task = output.task1 if number == 1 else output.task2
             if model_task is None:
-                results.append(_blank_task(number, loaded.mode))
+                results.append(blank_writing_task(number, loaded.mode))
                 criteria[number] = None
                 continue
             task = graded[number]
@@ -439,6 +404,42 @@ async def resume_processing(runner: GradingRunner) -> int:
     return len(ids)
 
 
+async def queue_stranded(factory: async_sessionmaker[AsyncSession]) -> int:
+    """Hand to the teacher queue every `held` assessment, and every `failed` one while
+    `ai_failure_fallback_to_teacher` is on, that has no teacher grade: an outcome written by
+    code older than the hand-off (e.g. during the deploy that added it) would otherwise wait
+    forever. Idempotent; returns how many it queued; never raises."""
+    fallback = get_settings().ai_failure_fallback_to_teacher
+    statuses = [AssessmentStatus.HELD] + ([AssessmentStatus.FAILED] if fallback else [])
+    has_grade = select(HumanGrade.id).where(
+        HumanGrade.test_session_id == AIAssessment.test_session_id
+    )
+    origins = {
+        AssessmentStatus.HELD: HumanGradeOrigin.AI_FLAGGED,
+        AssessmentStatus.FAILED: HumanGradeOrigin.AI_FALLBACK,
+    }
+    try:
+        async with factory() as db:
+            rows = (
+                await db.execute(
+                    select(AIAssessment.test_session_id, AIAssessment.status).where(
+                        AIAssessment.status.in_(statuses), ~has_grade.exists()
+                    )
+                )
+            ).tuples()
+            queued = 0
+            for session_id, status in list(rows):
+                origin = origins[AssessmentStatus(status)]
+                queued += await grades.enqueue_human(db, session_id, Skill.WRITING, origin)
+            await db.commit()
+    except Exception:
+        log.exception("ai_queue_stranded_failed")
+        return 0
+    if queued:
+        log.info("ai_stranded_queued", count=queued)
+    return queued
+
+
 @dataclass(frozen=True)
 class RegradeCounts:
     ready: int
@@ -448,12 +449,16 @@ class RegradeCounts:
 
 async def regrade_failed(runner: GradingRunner) -> RegradeCounts:
     """Retry every `failed` assessment from scratch (spec §7.4), one at a time. `ready` and
-    `held` rows are never touched."""
+    `held` rows are never touched, nor a failed one already handed to a teacher (human grading
+    spec §4.1: once handed over, AI never touches it again)."""
+    handed_over = select(HumanGrade.id).where(
+        HumanGrade.test_session_id == AIAssessment.test_session_id
+    )
     async with runner.factory() as db:
         ids = list(
             await db.scalars(
                 update(AIAssessment)
-                .where(AIAssessment.status == AssessmentStatus.FAILED)
+                .where(AIAssessment.status == AssessmentStatus.FAILED, ~handed_over.exists())
                 .values(
                     status=AssessmentStatus.PROCESSING, attempts=0, error=None, completed_at=None
                 )
