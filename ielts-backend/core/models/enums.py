@@ -51,6 +51,23 @@ class AssessmentStatus(StrEnum):
     FAILED = "failed"
 
 
+class HumanGradeStatus(StrEnum):
+    """A teacher-graded session's place in the queue."""
+
+    AWAITING_GRADER = "awaiting_grader"
+    CLAIMED = "claimed"
+    GRADED = "graded"
+
+
+class HumanGradeOrigin(StrEnum):
+    """Why a session is graded by a teacher."""
+
+    SPEAKING = "speaking"
+    STUDENT_REQUEST = "student_request"
+    AI_FALLBACK = "ai_fallback"
+    AI_FLAGGED = "ai_flagged"
+
+
 class Criterion(StrEnum):
     """IELTS Writing criteria; Task 1 is judged on Task Achievement, Task 2 on Task Response."""
 

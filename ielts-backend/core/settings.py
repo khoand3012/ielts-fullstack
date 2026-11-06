@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # OpenRouter providers never to route grading to: they accept the JSON schema but
     # don't enforce it (checked with scripts/ai_check.py).
     ai_provider_ignore: list[str] = ["venice"]
+    # Teacher grading (human grading spec §4.1, §5.2).
+    # A Writing essay whose AI grading fails every attempt goes to the teacher queue.
+    ai_failure_fallback_to_teacher: bool = True
+    # The most grades one teacher may hold claimed at once (admin reassignment ignores it).
+    teacher_max_active_claims: int = 3
     # On startup, re-run grading jobs a restart interrupted (`processing` rows only).
     ai_resume_on_startup: bool = True
 
