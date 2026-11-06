@@ -12,18 +12,32 @@ import structlog
 from sqlalchemy import ColumnElement, Select, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.ai.injection import clean_essay, word_count
 from core.exceptions import AppError, ConflictError, ForbiddenError, NotFoundError
 from core.models import (
+    AIAssessment,
+    Answer,
     HumanGrade,
     HumanGradeOrigin,
     HumanGradeStatus,
+    Role,
+    SessionMode,
     Skill,
     Test,
     TestSession,
     TestVersion,
     User,
 )
-from core.schemas.grading import QueueItem
+from core.schemas.content import WritingContent
+from core.schemas.grading import (
+    AIDraft,
+    GradeDetail,
+    GradingTask,
+    QueueItem,
+    WritingScoresDraft,
+)
+from core.schemas.session import WritingResult
+from core.services import catalog, storage
 from core.settings import get_settings
 
 log = structlog.get_logger()
@@ -177,3 +191,83 @@ async def release(db: AsyncSession, teacher: User, grade_id: uuid.UUID) -> None:
         raise await refusal(db, grade_id, teacher.id)
     await db.commit()
     log.info("human_grading_released", grade_id=str(grade_id), by=str(teacher.id))
+
+
+async def _grade(db: AsyncSession, grade_id: uuid.UUID) -> HumanGrade:
+    grade = await db.get(HumanGrade, grade_id, populate_existing=True)
+    if grade is None:
+        raise NotFoundError("grade not found")
+    return grade
+
+
+async def _tasks(db: AsyncSession, ts: TestSession) -> list[GradingTask]:
+    version = await db.get(TestVersion, ts.test_version_id)
+    assert version is not None
+    content = catalog.load_content(Skill.WRITING, version)
+    assert isinstance(content, WritingContent)
+    answers = {
+        a.question_number: a.value
+        for a in await db.scalars(select(Answer).where(Answer.test_session_id == ts.id))
+    }
+    tasks = []
+    for task in sorted(content.tasks, key=lambda t: t.number):
+        value = answers.get(task.number)
+        text = value if isinstance(value, str) and value.strip() else ""
+        tasks.append(
+            GradingTask(
+                number=task.number,
+                prompt=task.prompt,
+                image_url=await storage.signed_get_url(task.image) if task.image else None,
+                min_words=task.min_words,
+                text=text,
+                word_count=word_count(clean_essay(text).text),
+            )
+        )
+    return tasks
+
+
+async def _ai_draft(db: AsyncSession, session_id: uuid.UUID) -> AIDraft | None:
+    row = await db.scalar(select(AIAssessment).where(AIAssessment.test_session_id == session_id))
+    if row is None:
+        return None
+    result = WritingResult.model_validate(row.result) if row.result is not None else None
+    return AIDraft(band=row.band, result=result, signals=list(row.signals))
+
+
+async def get_detail(db: AsyncSession, user: User, grade_id: uuid.UUID) -> GradeDetail:
+    """Everything a teacher needs to grade (spec §5.2 step 3). Open to the claiming teacher
+    and to admins; drafts stay private to them."""
+    grade = await _grade(db, grade_id)
+    if user.role != Role.ADMIN and grade.claimed_by != user.id:
+        raise ForbiddenError("this test is not claimed by you")
+    item = await get_item(db, grade_id)
+    ts = await db.get(TestSession, grade.test_session_id)
+    assert ts is not None
+    flagged = grade.origin == HumanGradeOrigin.AI_FLAGGED
+    return GradeDetail(
+        **item.model_dump(),
+        mode=SessionMode(ts.mode),
+        tasks=await _tasks(db, ts),
+        draft=WritingScoresDraft.model_validate(grade.scores) if grade.scores else None,
+        ai=await _ai_draft(db, ts.id) if flagged else None,
+    )
+
+
+async def save_draft(
+    db: AsyncSession, teacher: User, grade_id: uuid.UUID, draft: WritingScoresDraft
+) -> WritingScoresDraft:
+    """Replace the caller's draft on their claim. Commits."""
+    saved = await db.scalar(
+        update(HumanGrade)
+        .where(
+            HumanGrade.id == grade_id,
+            HumanGrade.status == HumanGradeStatus.CLAIMED,
+            HumanGrade.claimed_by == teacher.id,
+        )
+        .values(scores=draft.model_dump(mode="json"))
+        .returning(HumanGrade.id)
+    )
+    if saved is None:
+        raise await refusal(db, grade_id, teacher.id)
+    await db.commit()
+    return draft

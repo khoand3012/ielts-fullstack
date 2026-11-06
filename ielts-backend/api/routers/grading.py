@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query, status
 
 from api.deps import DbSession, TeacherUser
 from core.models import Skill
-from core.schemas.grading import QueueItem, QueuePage
+from core.schemas.grading import GradeDetail, QueueItem, QueuePage, WritingScoresDraft
 from core.services import human_grading
 
 router = APIRouter(prefix="/grading", tags=["grading"])
@@ -28,6 +28,20 @@ async def queue(
 @router.get("/mine", response_model=list[QueueItem], operation_id="grading_mine")
 async def mine(teacher: TeacherUser, session: DbSession) -> list[QueueItem]:
     return await human_grading.list_mine(session, teacher)
+
+
+@router.get("/{grade_id}", response_model=GradeDetail, operation_id="grading_detail")
+async def detail(grade_id: uuid.UUID, user: TeacherUser, session: DbSession) -> GradeDetail:
+    return await human_grading.get_detail(session, user, grade_id)
+
+
+@router.put(
+    "/{grade_id}/draft", response_model=WritingScoresDraft, operation_id="grading_save_draft"
+)
+async def save_draft(
+    grade_id: uuid.UUID, draft: WritingScoresDraft, teacher: TeacherUser, session: DbSession
+) -> WritingScoresDraft:
+    return await human_grading.save_draft(session, teacher, grade_id, draft)
 
 
 @router.post("/{grade_id}/claim", response_model=QueueItem, operation_id="grading_claim")

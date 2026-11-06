@@ -2,10 +2,14 @@
 
 import uuid
 from datetime import datetime
+from typing import Annotated, Any, Self
 
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 
-from core.models import HumanGradeOrigin, HumanGradeStatus, Skill
+from core.ai.output import TASK_CRITERIA
+from core.models import Criterion, HumanGradeOrigin, HumanGradeStatus, SessionMode, Skill
+from core.schemas.session import Band, WritingResult
+from core.services.bands import validate_criterion_band
 
 
 class QueueItem(BaseModel):
@@ -24,3 +28,68 @@ class QueueItem(BaseModel):
 class QueuePage(BaseModel):
     items: list[QueueItem]
     total: int
+
+
+CriterionBand = Annotated[Band, AfterValidator(validate_criterion_band)]
+
+
+class CriterionScore(BaseModel):
+    band: CriterionBand
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class TaskScoresDraft(BaseModel):
+    """One task's scores so far; any criterion may still be missing."""
+
+    number: int
+    criteria: dict[Criterion, CriterionScore | None]
+    feedback: str | None = Field(default=None, max_length=5000)
+
+    @model_validator(mode="after")
+    def _criteria_fit_task(self) -> Self:
+        allowed = TASK_CRITERIA.get(self.number)
+        if allowed is None:
+            raise ValueError(f"Writing has no task {self.number}")
+        wrong = [c.value for c in self.criteria if c not in allowed]
+        if wrong:
+            raise ValueError(f"task {self.number} is not judged on {', '.join(wrong)}")
+        return self
+
+
+class WritingScoresDraft(BaseModel):
+    """A teacher's private work in progress, saved as they go (spec §5.2 step 5)."""
+
+    tasks: list[TaskScoresDraft]
+
+    @model_validator(mode="after")
+    def _one_entry_per_task(self) -> Self:
+        numbers = [t.number for t in self.tasks]
+        if len(numbers) != len(set(numbers)):
+            raise ValueError("each task may appear once")
+        return self
+
+
+class GradingTask(BaseModel):
+    number: int
+    prompt: str
+    image_url: str | None
+    min_words: int
+    # the essay as saved; "" for a blank task
+    text: str
+    word_count: int
+
+
+class AIDraft(BaseModel):
+    """The held AI grade of a flagged essay, and why it was held."""
+
+    band: Band | None
+    result: WritingResult | None
+    signals: list[dict[str, Any]]
+
+
+class GradeDetail(QueueItem):
+    mode: SessionMode
+    tasks: list[GradingTask]
+    draft: WritingScoresDraft | None
+    # only for `ai_flagged`
+    ai: AIDraft | None
