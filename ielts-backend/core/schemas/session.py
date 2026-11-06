@@ -121,6 +121,8 @@ class WritingTask(BaseModel):
     band: Band | None
     word_count: int
     criteria: list[WritingCriterion]
+    # the teacher's feedback on the task; null for AI grades
+    feedback: str | None = None
 
 
 class WritingResult(BaseModel):

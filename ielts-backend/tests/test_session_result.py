@@ -6,11 +6,12 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from core.models import (
     AIAssessment,
     AssessmentStatus,
+    Role,
     SessionMode,
     Skill,
     TestSession,
@@ -19,11 +20,13 @@ from core.models import (
 from core.schemas.session import AnswerInput
 from core.services import ai_grading, grades, sessions
 from core.services.ai_grading import GradingRunner
+from core.services.bands import TASK_CRITERIA
 from core.settings import get_settings
 from tests.ai_helpers import FakeOpenRouter, completion, model_output
 from tests.content_factories import writing_staff
+from tests.grading_helpers import grade_of, requested
 from tests.helpers import broken_answer_key, correct_answers, publish_test
-from tests.test_ai_grading import BOTH, ESSAY1, ESSAY2
+from tests.test_ai_grading import BOTH, ESSAY1, ESSAY2, graded
 
 MakeUser = Callable[..., Awaitable[tuple[User, str]]]
 Runner = tuple[GradingRunner, FakeOpenRouter]
@@ -464,3 +467,143 @@ async def test_session_list_carries_writing_band(
     resp = await app_client.get("/sessions", headers=h(tok))
     [item] = [i for i in resp.json()["items"] if i["id"] == str(ts.id)]
     assert item["band"] == 6.0
+
+
+TEACHER_SCORES = {
+    "tasks": [
+        {
+            "number": 1,
+            "criteria": {
+                "task_achievement": {"band": 6, "comment": "Overview is missing."},
+                "coherence_cohesion": {"band": 6.5, "comment": None},
+                "lexical_resource": {"band": 6, "comment": None},
+                "grammatical_range_accuracy": {"band": 6.5, "comment": None},
+            },
+            "feedback": "Add an overview.",
+        },
+        {
+            "number": 2,
+            "criteria": {
+                "task_response": {"band": 7, "comment": "Clear position."},
+                "coherence_cohesion": {"band": 7, "comment": None},
+                "lexical_resource": {"band": 7, "comment": None},
+                "grammatical_range_accuracy": {"band": 6.5, "comment": None},
+            },
+            "feedback": "Well argued.",
+        },
+    ]
+}
+
+
+async def teacher_grades(
+    client: AsyncClient, engine: AsyncEngine, make_user: MakeUser, ts: TestSession, **kw: Any
+) -> User:
+    """A new teacher claims the session's grade and submits `TEACHER_SCORES` (or `scores`)."""
+    teacher, tok = await make_user(Role.TEACHER)
+    grade = await grade_of(engine, ts)
+    assert (await client.post(f"/grading/{grade.id}/claim", headers=h(tok))).status_code == 200
+    body = kw.get("scores", TEACHER_SCORES)
+    resp = await client.post(f"/grading/{grade.id}/submit", json=body, headers=h(tok))
+    assert resp.status_code == 204, resp.text
+    return teacher
+
+
+async def test_teacher_grade_is_the_result(
+    app_client: AsyncClient, db_session: AsyncSession, _engine: AsyncEngine, make_user: MakeUser
+) -> None:
+    ts, _, tok = await requested(db_session, make_user)
+    assert (await result(app_client, tok, ts))["status"] == "being_graded"
+
+    teacher = await teacher_grades(app_client, _engine, make_user, ts)
+
+    resp = await app_client.get(f"/sessions/{ts.id}/result", headers=h(tok))
+    body = resp.json()
+    assert (body["status"], body["band"], body["grading_method"]) == ("graded", 6.5, "human")
+    one, two = body["writing"]["tasks"]
+    assert (one["band"], one["feedback"], two["band"], two["feedback"]) == (
+        6.5,
+        "Add an overview.",
+        7.0,
+        "Well argued.",
+    )
+    assert [c["criterion"] for c in one["criteria"]] == [
+        "task_achievement",
+        "coherence_cohesion",
+        "lexical_resource",
+        "grammatical_range_accuracy",
+    ]
+    assert one["criteria"][0]["comments"] == [
+        {"comment": "Overview is missing.", "quote": None, "suggestion": None, "kind": None}
+    ]
+    assert one["criteria"][1]["comments"] == []
+    assert (one["text"], two["text"]) == (ESSAY1, ESSAY2)
+    assert one["word_count"] > 0
+    assert body["writing"]["focus"] == []
+    assert str(teacher.id) not in resp.text and teacher.email not in resp.text
+
+
+async def test_flagged_session_shows_teacher_grade_not_ai(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+    _engine: AsyncEngine,
+    make_user: MakeUser,
+    ai_runner: Runner,
+) -> None:
+    user, tok = await make_user()
+    ts = await graded(db_session, user, ai_runner, AssessmentStatus.HELD)
+    ai_band = await db_session.scalar(
+        select(AIAssessment.band).where(AIAssessment.test_session_id == ts.id)
+    )
+    nines = {"band": 9, "comment": None}
+    scores = {
+        "tasks": [
+            {"number": n, "criteria": dict.fromkeys(names, nines), "feedback": "Excellent."}
+            for n, names in ((1, TASK_CRITERIA[1]), (2, TASK_CRITERIA[2]))
+        ]
+    }
+
+    await teacher_grades(app_client, _engine, make_user, ts, scores=scores)
+
+    body = await result(app_client, tok, ts)
+    assert ai_band is not None and ai_band != D(9)
+    assert (body["status"], body["band"]) == ("graded", 9.0)
+    bands = {c["band"] for t in body["writing"]["tasks"] for c in t["criteria"]}
+    assert bands == {9.0}
+    assert body["writing"]["focus"] == []
+    assert all(t["feedback"] == "Excellent." for t in body["writing"]["tasks"])
+
+
+async def test_claimed_and_draft_stay_being_graded(
+    app_client: AsyncClient, db_session: AsyncSession, _engine: AsyncEngine, make_user: MakeUser
+) -> None:
+    ts, _, tok = await requested(db_session, make_user)
+    _, teacher = await make_user(Role.TEACHER)
+    grade = await grade_of(_engine, ts)
+    assert (
+        await app_client.post(f"/grading/{grade.id}/claim", headers=h(teacher))
+    ).status_code == 200
+    draft = {"tasks": [TEACHER_SCORES["tasks"][0]]}
+    saved = await app_client.put(f"/grading/{grade.id}/draft", json=draft, headers=h(teacher))
+    assert saved.status_code == 200, saved.text
+
+    body = await result(app_client, tok, ts)
+
+    assert (body["status"], body["writing"], body["band"]) == ("being_graded", None, None)
+    assert "Add an overview." not in str(body)
+
+
+async def test_teacher_grade_blank_practice_task(
+    app_client: AsyncClient, db_session: AsyncSession, _engine: AsyncEngine, make_user: MakeUser
+) -> None:
+    ts, _, tok = await requested(db_session, make_user, essays={2: ESSAY2})
+    await teacher_grades(
+        app_client, _engine, make_user, ts, scores={"tasks": [TEACHER_SCORES["tasks"][1]]}
+    )
+
+    body = await result(app_client, tok, ts)
+
+    assert (body["status"], body["band"]) == ("graded", None)
+    one, two = body["writing"]["tasks"]
+    assert (one["band"], one["criteria"], one["text"], one["word_count"]) == (None, [], "", 0)
+    assert one["feedback"] is None
+    assert two["band"] == 7.0
