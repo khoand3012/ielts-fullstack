@@ -13,7 +13,13 @@ from sqlalchemy import ColumnElement, Select, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.ai.injection import clean_essay, word_count
-from core.exceptions import AppError, ConflictError, ForbiddenError, NotFoundError
+from core.exceptions import (
+    AppError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationAppError,
+)
 from core.models import (
     AIAssessment,
     Answer,
@@ -34,10 +40,12 @@ from core.schemas.grading import (
     GradeDetail,
     GradingTask,
     QueueItem,
+    WritingScores,
     WritingScoresDraft,
 )
 from core.schemas.session import WritingResult
-from core.services import catalog, storage
+from core.services import catalog, grades, storage
+from core.services.bands import TASK_CRITERIA, writing_bands
 from core.settings import get_settings
 
 log = structlog.get_logger()
@@ -271,3 +279,46 @@ async def save_draft(
         raise await refusal(db, grade_id, teacher.id)
     await db.commit()
     return draft
+
+
+async def submit(
+    db: AsyncSession,
+    teacher: User,
+    grade_id: uuid.UUID,
+    scores: WritingScores,
+    now: datetime | None = None,
+) -> None:
+    """Submit the caller's grade (spec §5.2 step 6): every written task, none of the blank
+    ones. Final; commits."""
+    grade = await _grade(db, grade_id)
+    if grade.status != HumanGradeStatus.CLAIMED or grade.claimed_by != teacher.id:
+        raise await refusal(db, grade_id, teacher.id)
+    ts = await db.get(TestSession, grade.test_session_id)
+    assert ts is not None
+    written = {t.number for t in await _tasks(db, ts) if t.text}
+    submitted = {t.number: t for t in scores.tasks}
+    if set(submitted) != written:
+        raise ValidationAppError(
+            f"grade exactly the written tasks: {sorted(written) or 'none'}; blank tasks are "
+            "left out"
+        )
+    mode = SessionMode(ts.mode)
+    bands = writing_bands(
+        mode,
+        {
+            n: [submitted[n].criteria[c].band for c in TASK_CRITERIA[n]] if n in submitted else None
+            for n in TASK_CRITERIA
+        },
+    )
+    moved = await grades.record_human_grade(
+        db, grade_id, teacher.id, scores.model_dump(mode="json"), bands, _now(now)
+    )
+    if moved is None:  # released or reassigned since we looked
+        raise await refusal(db, grade_id, teacher.id)
+    await db.commit()
+    log.info(
+        "human_grading_graded",
+        grade_id=str(grade_id),
+        by=str(teacher.id),
+        band=str(bands.overall) if bands.overall is not None else None,
+    )

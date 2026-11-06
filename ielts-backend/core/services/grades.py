@@ -8,12 +8,14 @@ and `band`).
   assessment row itself. A `held` outcome, and a `failed` one unless
   `ai_failure_fallback_to_teacher` is off, hands the session to the teacher queue.
 - Teacher grading: `enqueue_human` puts a session in the teacher queue (once, however often
-  it is called).
+  it is called); `record_human_grade` writes the claiming teacher's grade and gives the
+  session its band. A grade is final: it is written once.
 
 Nothing here commits: callers own their transactions.
 """
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -27,6 +29,7 @@ from core.models import (
     AssessmentStatus,
     HumanGrade,
     HumanGradeOrigin,
+    HumanGradeStatus,
     Module,
     SessionMode,
     Skill,
@@ -34,6 +37,7 @@ from core.models import (
     TestVersion,
 )
 from core.services import auto_grading, catalog
+from core.services.bands import WritingBands
 from core.services.content import item_index
 from core.settings import get_settings
 
@@ -124,3 +128,37 @@ async def enqueue_human(
     if inserted is not None:
         log.info("human_grading_queued", session_id=str(session_id), origin=str(origin))
     return inserted is not None
+
+
+async def record_human_grade(
+    db: AsyncSession,
+    grade_id: uuid.UUID,
+    teacher_id: uuid.UUID,
+    scores: dict[str, Any],
+    bands: WritingBands,
+    now: datetime,
+) -> uuid.UUID | None:
+    """Write a teacher's grade, only if `teacher_id` still holds the claim, and set the
+    session's band to the overall. Returns the session id, or `None` if nothing moved."""
+    session_id = await db.scalar(
+        update(HumanGrade)
+        .where(
+            HumanGrade.id == grade_id,
+            HumanGrade.status == HumanGradeStatus.CLAIMED,
+            HumanGrade.claimed_by == teacher_id,
+        )
+        .values(
+            status=HumanGradeStatus.GRADED,
+            scores=scores,
+            overall_band=bands.overall,
+            graded_by=teacher_id,
+            graded_at=now,
+        )
+        .returning(HumanGrade.test_session_id)
+    )
+    if session_id is None:
+        return None
+    await db.execute(
+        update(TestSession).where(TestSession.id == session_id).values(band=bands.overall)
+    )
+    return session_id

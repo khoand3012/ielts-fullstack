@@ -20,22 +20,7 @@ from pydantic import (
 
 from core.models.enums import CommentKind, Criterion
 from core.services.auto_grading import normalize
-from core.services.bands import validate_criterion_band
-
-TASK_CRITERIA: dict[int, tuple[Criterion, ...]] = {
-    1: (
-        Criterion.TASK_ACHIEVEMENT,
-        Criterion.COHERENCE_COHESION,
-        Criterion.LEXICAL_RESOURCE,
-        Criterion.GRAMMATICAL_RANGE_ACCURACY,
-    ),
-    2: (
-        Criterion.TASK_RESPONSE,
-        Criterion.COHERENCE_COHESION,
-        Criterion.LEXICAL_RESOURCE,
-        Criterion.GRAMMATICAL_RANGE_ACCURACY,
-    ),
-}
+from core.services.bands import TASK_CRITERIA, validate_criterion_band
 
 
 class OutputError(ValueError):

@@ -6,10 +6,9 @@ from typing import Annotated, Any, Self
 
 from pydantic import AfterValidator, BaseModel, Field, model_validator
 
-from core.ai.output import TASK_CRITERIA
 from core.models import Criterion, HumanGradeOrigin, HumanGradeStatus, SessionMode, Skill
 from core.schemas.session import Band, WritingResult
-from core.services.bands import validate_criterion_band
+from core.services.bands import TASK_CRITERIA, validate_criterion_band
 
 
 class QueueItem(BaseModel):
@@ -60,6 +59,37 @@ class WritingScoresDraft(BaseModel):
     """A teacher's private work in progress, saved as they go (spec §5.2 step 5)."""
 
     tasks: list[TaskScoresDraft]
+
+    @model_validator(mode="after")
+    def _one_entry_per_task(self) -> Self:
+        numbers = [t.number for t in self.tasks]
+        if len(numbers) != len(set(numbers)):
+            raise ValueError("each task may appear once")
+        return self
+
+
+class TaskScores(BaseModel):
+    """One task's finished grade: a band on each of the task's four criteria, and feedback."""
+
+    number: int
+    criteria: dict[Criterion, CriterionScore]
+    feedback: str = Field(min_length=1, max_length=5000)
+
+    @model_validator(mode="after")
+    def _all_criteria(self) -> Self:
+        expected = TASK_CRITERIA.get(self.number)
+        if expected is None:
+            raise ValueError(f"Writing has no task {self.number}")
+        if set(self.criteria) != set(expected):
+            names = ", ".join(c.value for c in expected)
+            raise ValueError(f"task {self.number} needs a band on exactly: {names}")
+        return self
+
+
+class WritingScores(BaseModel):
+    """A submitted Writing grade: one entry per written task; blank tasks are left out."""
+
+    tasks: list[TaskScores]
 
     @model_validator(mode="after")
     def _one_entry_per_task(self) -> Self:

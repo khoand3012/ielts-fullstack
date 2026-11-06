@@ -24,8 +24,8 @@ from core.models import (
 )
 from core.schemas.session import AnswerInput, WritingResult
 from core.services import ai_grading, sessions
-from core.services.ai_grading import GradingRunner, grade_session, writing_bands
-from core.services.bands import task_band, writing_overall
+from core.services.ai_grading import GradingRunner, grade_session
+from core.services.bands import task_band, writing_bands, writing_overall
 from core.settings import get_settings
 from tests.ai_helpers import FakeOpenRouter, completion, model_output
 from tests.helpers import publish_test

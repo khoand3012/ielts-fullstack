@@ -5,7 +5,13 @@ from fastapi import APIRouter, Query, status
 
 from api.deps import DbSession, TeacherUser
 from core.models import Skill
-from core.schemas.grading import GradeDetail, QueueItem, QueuePage, WritingScoresDraft
+from core.schemas.grading import (
+    GradeDetail,
+    QueueItem,
+    QueuePage,
+    WritingScores,
+    WritingScoresDraft,
+)
 from core.services import human_grading
 
 router = APIRouter(prefix="/grading", tags=["grading"])
@@ -56,3 +62,14 @@ async def claim(grade_id: uuid.UUID, teacher: TeacherUser, session: DbSession) -
 )
 async def release(grade_id: uuid.UUID, teacher: TeacherUser, session: DbSession) -> None:
     await human_grading.release(session, teacher, grade_id)
+
+
+@router.post(
+    "/{grade_id}/submit",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="grading_submit",
+)
+async def submit(
+    grade_id: uuid.UUID, scores: WritingScores, teacher: TeacherUser, session: DbSession
+) -> None:
+    await human_grading.submit(session, teacher, grade_id, scores)

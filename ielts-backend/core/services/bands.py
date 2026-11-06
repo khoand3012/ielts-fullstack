@@ -7,10 +7,12 @@ Council rule: to the nearest half band, where .25 rounds up to the next half ban
 Reading and Listening convert a raw mark (0-40) to a band with fixed tables instead.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from decimal import ROUND_FLOOR, Decimal
 
-from core.models.enums import Module, Skill
+from core.models.enums import Criterion, Module, SessionMode, Skill
+from core.schemas.session import WritingCriterion, WritingTask
 
 _HALF = Decimal("0.5")
 _ONE_DECIMAL = Decimal("0.1")
@@ -81,3 +83,57 @@ def raw_to_band(skill: Skill, module: Module | None, raw: int) -> Decimal:
     if table is None:
         raise ValueError(f"no band table for {skill} with module {module}")
     return next(band for low, band in table if raw >= low)
+
+
+# The criteria each Writing task is judged on, in the order they are shown and stored.
+TASK_CRITERIA: dict[int, tuple[Criterion, ...]] = {
+    1: (
+        Criterion.TASK_ACHIEVEMENT,
+        Criterion.COHERENCE_COHESION,
+        Criterion.LEXICAL_RESOURCE,
+        Criterion.GRAMMATICAL_RANGE_ACCURACY,
+    ),
+    2: (
+        Criterion.TASK_RESPONSE,
+        Criterion.COHERENCE_COHESION,
+        Criterion.LEXICAL_RESOURCE,
+        Criterion.GRAMMATICAL_RANGE_ACCURACY,
+    ),
+}
+
+_ZEROS = (Decimal(0),) * _CRITERIA_PER_SCORE
+
+
+@dataclass(frozen=True)
+class WritingBands:
+    task1: Decimal | None
+    task2: Decimal | None
+    overall: Decimal | None
+
+
+def writing_bands(
+    mode: SessionMode, criteria: Mapping[int, Sequence[Decimal] | None]
+) -> WritingBands:
+    """Task and overall bands; `None` criteria mean a blank task. In an exam a blank task
+    scores 0 and the overall is always given; in practice it isn't graded, and the overall
+    needs both tasks."""
+    filled = {
+        n: (list(_ZEROS) if c is None and mode == SessionMode.EXAM else c)
+        for n, c in ((n, criteria.get(n)) for n in (1, 2))
+    }
+    t1, t2 = filled[1], filled[2]
+    return WritingBands(
+        task1=task_band(t1) if t1 is not None else None,
+        task2=task_band(t2) if t2 is not None else None,
+        overall=writing_overall(t1, t2) if t1 is not None and t2 is not None else None,
+    )
+
+
+def blank_writing_task(number: int, mode: SessionMode) -> WritingTask:
+    """A blank task as served: zero on every criterion in an exam, not graded in practice."""
+    criteria = (
+        [WritingCriterion(criterion=c, band=Decimal(0), comments=[]) for c in TASK_CRITERIA[number]]
+        if mode == SessionMode.EXAM
+        else []
+    )
+    return WritingTask(number=number, band=None, word_count=0, criteria=criteria)
